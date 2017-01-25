@@ -7,11 +7,13 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from tqdm import tqdm
+from image_processing import ImageProcessing
 
-class CalibrateImage(object):
+class CalibrateImage(ImageProcessing):
     __logger = logging.getLogger(__name__)
 
-    def __init__(self, fullpath, name, img_obj_pts_x, img_obj_pts_y, results_dir, output_images_dir):
+    def __init__(self, config, fullpath, name, img_obj_pts_x, img_obj_pts_y, results_dir, output_images_dir):
+        super(CalibrateImage, self).__init__(config)
         self.__fullpath = fullpath
         self.__name = name
         self.__img_obj_pts_x = img_obj_pts_x
@@ -19,21 +21,18 @@ class CalibrateImage(object):
         self.__results_dir = results_dir
         self.__output_images_dir = output_images_dir
 
-    def load_image(self):
-        return mpimg.imread(self.__fullpath)
-
     def name(self):
         return self.__name
 
     def calibrate(self):
-        img = self.load_image()
+        img = self.load_image(self.__fullpath)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         ret, corners = cv2.findChessboardCorners(gray, (self.__img_obj_pts_x, self.__img_obj_pts_y), None)
 
         if ret == True:
             # Draw and display the corners
-            img_with_corners_drawn = self.load_image()
+            img_with_corners_drawn = self.load_image(self.__fullpath)
             cv2.drawChessboardCorners(img_with_corners_drawn, (self.__img_obj_pts_x, self.__img_obj_pts_y), corners, ret)
             plt.imsave('{0}/corners/{1}'.format(self.__output_images_dir, self.name()), img_with_corners_drawn, cmap=cm.gray)
 
@@ -70,6 +69,7 @@ class Calibrate(object):
     __logger = logging.getLogger(__name__)
 
     def __init__(self, config):
+        self.__config = config
         self.__data_dir = config.get('camera_calibration', 'data_directory')
         self.__results_dir = '{0}/results'.format(self.__data_dir)
         self.__output_images_dir = '{0}/camera_cal'.format(config.get('camera_calibration', 'output_directory'))
@@ -91,7 +91,7 @@ class Calibrate(object):
         i = self.__file_start_idx
         while i <= self.__file_end_idx:
             filename = str.format(self.__filename_fmt, i)
-            yield CalibrateImage('{0}/{1}'.format(self.__data_dir, filename), filename, self.__img_obj_pts_x, self.__img_obj_pts_y, self.__results_dir, self.__output_images_dir)
+            yield CalibrateImage(self.__config, '{0}/{1}'.format(self.__data_dir, filename), filename, self.__img_obj_pts_x, self.__img_obj_pts_y, self.__results_dir, self.__output_images_dir)
             i += 1
 
     def calibrate(self):
@@ -107,10 +107,6 @@ class Calibrate(object):
 
         (mtx, dist, _, _) =  self.__undistort_data
         undistorted_img = cv2.undistort(img, mtx, dist, None, mtx)
-
-        #self.__display_image(img)
-        #self.__display_image(undistorted_img)
-
         return undistorted_img
 
     def __display_image(self, image):

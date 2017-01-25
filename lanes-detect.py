@@ -2,7 +2,10 @@
 import argparse
 import logging
 import configparser
+from pipeline import Pipeline
 from calibrate import Calibrate
+from image_processing import ImageProcessing, ImageThresholding, ImageCannyEdgeDetection
+from perspective import PerspectiveTransform
 
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,12 +31,26 @@ def run():
     if args.cmd == "selfdiag":
         cam_calib = Calibrate(config)
         cam_calib.selfdiag()
+        #pipeline = Pipeline(config)
+        #pipeline.selfdiag()
+
+        ip = ImageProcessing(config)
+        ip.selfdiag()
+
+        ip = ImageCannyEdgeDetection(config)
+        ip.selfdiag()
+
+        ip = ImageThresholding(config)
+        ip.selfdiag()
+
+        pt = PerspectiveTransform(config, load_saved_trans_matrix=False)
+        pt.selfdiag()
 
         pass
 
     elif args.cmd == "calib":
-        # TODO
-        pass
+        cam_calib = Calibrate(config)
+        cam_calib.calibrate()
 
     elif args.cmd == "detect":
         # TODO
