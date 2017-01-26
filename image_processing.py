@@ -10,11 +10,14 @@ from tqdm import tqdm
 
 
 class ImageProcessing(object):
+    __logger = logging.getLogger(__name__)
+
     def __init__(self, config):
         self.__config = config
         self.__test_images_directory = config.get('test', 'test_images_directory')
         self.__output_images_dir = config.get('detection', 'output_directory')
         self.__data_dir = config.get('camera_calibration', 'data_directory')
+        self.__save_output_images = config.getboolean('global', 'save_output_images')
 
     def test_files(self):
         image_files = [
@@ -26,16 +29,16 @@ class ImageProcessing(object):
          'test3.jpg',
          'test4.jpg',
          'test5.jpg',
-         'test6.jpg',
-         'challenge_vid_5.jpg',
-         'harder_challenge_vid_2.jpg',
-         'harder_challenge_vid_4.jpg',
-         'harder_challenge_vid_6.jpg',
-         'harder_challenge_vid_8.jpg',
-         'harder_challenge_vid_9.jpg',
-         'harder_challenge_vid_12.jpg',
-         'harder_challenge_vid_13.jpg',
-         'harder_challenge_vid_14.jpg']
+         'test6.jpg']
+         #'challenge_vid_5.jpg',
+         #'harder_challenge_vid_2.jpg',
+         #'harder_challenge_vid_4.jpg',
+         #'harder_challenge_vid_6.jpg',
+         #'harder_challenge_vid_8.jpg',
+         #'harder_challenge_vid_9.jpg',
+         #'harder_challenge_vid_12.jpg',
+         #'harder_challenge_vid_13.jpg',
+         #'harder_challenge_vid_14.jpg']
 
         for image_file in image_files:
             yield [image_file, "{0}/{1}".format(self.__test_images_directory, image_file)]
@@ -72,12 +75,18 @@ class ImageProcessing(object):
             #self.display_image_grid('harder_challenge_vid_14.jpg', [gray_r, hls_s, hsv_s], ['gray r', 'hls s', 'hsv s'], cmap='gray')
             break
 
+    def save_output_images(self):
+        return self.__save_output_images
+
     def display_image(self, image, cmap=None):
         plt.imshow(image, cmap=cmap)
         plt.show()
 
     def display_image_grid(self, filename, images, titles, cmap=None, save=False):
-        # Plot the result
+        output_images_enabled = self.__config.getboolean('global', 'output_images_enabled')
+        if output_images_enabled == False:
+            return
+
         fig, axn = plt.subplots(1, len(images), figsize=(24, 9))
         fig.tight_layout()
 
@@ -86,11 +95,16 @@ class ImageProcessing(object):
             axn[i].set_title(titles[i], fontsize=40)
 
         plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
+
         if save == True:
+            self.__logger.info("saving {0}/thresholded/{1}".format(self.__output_images_dir, filename))
             fig.savefig("{0}/thresholded/{1}".format(self.__output_images_dir, filename))
-            pass
         else:
+            plt.suptitle(filename)
             plt.show()
+
+    def engine_compart_pixes(self):
+        return 55
 
     def region_of_interest(self, image):
         image_height = image.shape[0]
@@ -98,7 +112,7 @@ class ImageProcessing(object):
 
         viewport_x_min = 175
         viewport_x_max = 1075
-        viewport_y_max = image_height - 55
+        viewport_y_max = image_height - self.engine_compart_pixes()
         viewport_center_x = image_width / 2
         viewport_lane_horizon_y = 425
 
@@ -126,7 +140,7 @@ class ImageProcessing(object):
     def apply_on_test_images(self):
         raise NotImplementedError("apply_on_test_images() def must be overridden!")
 
-    def process(self, filename, image):
+    def process(self, image, filename=None, display=False):
         raise NotImplementedError("process() def must be overridden!")
 
     def load_image(self, path):
@@ -203,6 +217,24 @@ class ImageProcessing(object):
         color_binary = np.dstack((np.zeros_like(binary_image), binary_image, binary_image))
         return color_binary
 
+    def fig2data(self, fig):
+        """
+        @brief Convert a Matplotlib figure to a 4D numpy array with RGBA channels and return it
+        @param fig a matplotlib figure
+        @return a numpy 3D array of RGBA values
+        """
+        # draw the renderer
+        fig.canvas.draw()
+
+        # Get the RGBA buffer from the figure
+        w, h = fig.canvas.get_width_height()
+        buf = np.fromstring(fig.canvas.tostring_argb(), dtype=numpy.uint8)
+        buf.shape = (w, h, 4)
+
+        # canvas.tostring_argb give pixmap in ARGB mode. Roll the ALPHA channel to have it in RGBA mode
+        buf = np.roll(buf, 3, axis=2)
+        return buf
+
     def __thresholded_binary_image(self, image, threshold):
         binary = np.zeros_like(image)
         binary[(image > threshold[0]) & (image <= threshold[1])] = 1
@@ -225,7 +257,7 @@ class ImageCannyEdgeDetection(ImageProcessing):
             image = self.load_image(file)
             image = self.process(filename, image)
 
-    def process(self, filename, image):
+    def process(self, image, filename=None, display=False):
         image = self.to_hls(image, to_binary=False, chan='S', threshold=(180, 255))
         img_gray = self.to_grayscale(image)
 
@@ -235,7 +267,10 @@ class ImageCannyEdgeDetection(ImageProcessing):
         img_masked = self.region_of_interest(img_canny_edge)
 
         hough_lines_image = self.hough_lines(img_masked, rho=2, theta=np.pi / 180, threshold=self.__hough_threshold, min_line_len=self.__hough_min_line_len, max_line_gap=self.__hough_max_line_gap, y_min=0)
-        self.display_image_grid("canny_{0}".format(filename), [image, img_masked, hough_lines_image], ['hls', 'canny', 'hough'], cmap='gray', save=True)
+
+        if display:
+            self.display_image_grid("canny_{0}".format(filename), [image, img_masked, hough_lines_image], ['hls', 'canny', 'hough'], cmap='gray', save=self.save_output_images())
+
         return hough_lines_image
 
     def canny(self, img):
@@ -272,12 +307,12 @@ class ImageThresholding(ImageProcessing):
             image = self.load_image(file)
             image = self.process(filename, image)
 
-    def process(self, filename, image):
-        image_conv_hls = self.to_hls(image, to_binary=True, chan='S', threshold=(180, 255))
+    def process(self, image, filename=None, display=True):
+        image_conv_hls = self.to_hls(image, to_binary=True, chan='S', threshold=(90, 255))
         image_conv_gray = self.to_grayscale(image)  # self.to_hls(image, to_binary=True, chan='S')
         ksize = 3
 
-        image_conv = self.region_of_interest(image_conv_gray)
+        image_conv = self.region_of_interest(image_conv_hls)
 
         gradx = self.abs_sobel_thresh(image_conv, orient='x', sobel_kernel=ksize, thresh=(20, 255))
         grady = self.abs_sobel_thresh(image_conv, orient='y', sobel_kernel=ksize, thresh=(20, 255))
@@ -286,7 +321,11 @@ class ImageThresholding(ImageProcessing):
 
         combined = np.zeros_like(dir_binary)
         combined[((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
-        self.display_image_grid(filename, [image_conv_gray, image_conv, gradx, grady, mag_binary, dir_binary, combined], ['gray', 'hls (s chan)', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=True)
+        #combined[(grady == 1) | ((mag_binary == 1) & (dir_binary == 1))] = 1
+
+        if display:
+            self.display_image_grid(filename, [image_conv_gray, image_conv, gradx, grady, mag_binary, dir_binary, combined], ['gray', 'hls (s chan)', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
+
         return combined
 
     def abs_sobel_thresh(self, image, orient='x', sobel_kernel=3, thresh=(0, 255)):
