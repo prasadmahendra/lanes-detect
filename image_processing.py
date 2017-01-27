@@ -21,15 +21,17 @@ class ImageProcessing(object):
 
     def test_files(self):
         image_files = [
-         #'harder_challenge_vid_13.jpg',
          'straight_lines1.jpg',
-         'straight_lines2.jpg',
-         'test1.jpg',
-         'test2.jpg',
-         'test3.jpg',
-         'test4.jpg',
-         'test5.jpg',
-         'test6.jpg']
+         'projectvid_25.jpg',
+         'projectvid_24.jpg',
+         'projectvid_23.jpg']
+         #'straight_lines2.jpg',
+         #'test1.jpg',
+         #'test2.jpg',
+         #'test3.jpg',
+         #'test4.jpg',
+         #'test5.jpg',
+         #'test6.jpg']
          #'challenge_vid_5.jpg',
          #'harder_challenge_vid_2.jpg',
          #'harder_challenge_vid_4.jpg',
@@ -83,6 +85,7 @@ class ImageProcessing(object):
         plt.show()
 
     def display_image_grid(self, filename, images, titles, cmap=None, save=False):
+        plt.close()
         output_images_enabled = self.__config.getboolean('global', 'output_images_enabled')
         if output_images_enabled == False:
             return
@@ -104,14 +107,14 @@ class ImageProcessing(object):
             plt.show()
 
     def engine_compart_pixes(self):
-        return 55
+        return 50
 
     def region_of_interest(self, image):
         image_height = image.shape[0]
         image_width = image.shape[1]
 
         viewport_x_min = 175
-        viewport_x_max = 1075
+        viewport_x_max = 1150
         viewport_y_max = image_height - self.engine_compart_pixes()
         viewport_center_x = image_width / 2
         viewport_lane_horizon_y = 425
@@ -255,10 +258,10 @@ class ImageCannyEdgeDetection(ImageProcessing):
     def apply_on_test_images(self):
         for filename, file in self.test_files():
             image = self.load_image(file)
-            image = self.process(filename, image)
+            image = self.process(image, filename)
 
     def process(self, image, filename=None, display=False):
-        image = self.to_hls(image, to_binary=False, chan='S', threshold=(180, 255))
+        #image = self.to_hls(image, to_binary=False, chan='S', threshold=(180, 255))
         img_gray = self.to_grayscale(image)
 
         img_gaussian = self.gaussian_blur(img_gray, 3)
@@ -268,8 +271,7 @@ class ImageCannyEdgeDetection(ImageProcessing):
 
         hough_lines_image = self.hough_lines(img_masked, rho=2, theta=np.pi / 180, threshold=self.__hough_threshold, min_line_len=self.__hough_min_line_len, max_line_gap=self.__hough_max_line_gap, y_min=0)
 
-        if display:
-            self.display_image_grid("canny_{0}".format(filename), [image, img_masked, hough_lines_image], ['hls', 'canny', 'hough'], cmap='gray', save=self.save_output_images())
+        self.display_image_grid("canny_{0}".format(filename), [image, img_masked, hough_lines_image], ['hls', 'canny', 'hough'], cmap='gray', save=self.save_output_images())
 
         return hough_lines_image
 
@@ -305,26 +307,24 @@ class ImageThresholding(ImageProcessing):
     def apply_on_test_images(self):
         for filename, file in self.test_files():
             image = self.load_image(file)
-            image = self.process(filename, image)
+            image = self.process(image, filename)
 
     def process(self, image, filename=None, display=True):
-        image_conv_hls = self.to_hls(image, to_binary=True, chan='S', threshold=(90, 255))
-        image_conv_gray = self.to_grayscale(image)  # self.to_hls(image, to_binary=True, chan='S')
+        image_conv = self.to_hls(image, to_binary=True, chan='S', threshold=(75, 255))
         ksize = 3
 
-        image_conv = self.region_of_interest(image_conv_hls)
+        image_conv_roi = self.region_of_interest(image_conv)
 
-        gradx = self.abs_sobel_thresh(image_conv, orient='x', sobel_kernel=ksize, thresh=(20, 255))
-        grady = self.abs_sobel_thresh(image_conv, orient='y', sobel_kernel=ksize, thresh=(20, 255))
-        mag_binary = self.mag_thresh(image_conv, sobel_kernel=ksize, mag_thresh=(20, 255))
-        dir_binary = self.dir_threshold(image_conv, sobel_kernel=ksize, thresh=(0.7, 1.3))
+        gradx = self.abs_sobel_thresh(image_conv_roi, orient='x', sobel_kernel=ksize, thresh=(20, 255))
+        grady = self.abs_sobel_thresh(image_conv_roi, orient='y', sobel_kernel=ksize, thresh=(20, 255))
+        mag_binary = self.mag_thresh(image_conv_roi, sobel_kernel=ksize, mag_thresh=(20, 255))
+        dir_binary = self.dir_threshold(image_conv_roi, sobel_kernel=ksize, thresh=(0.7, 1.3))
 
         combined = np.zeros_like(dir_binary)
         combined[((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
-        #combined[(grady == 1) | ((mag_binary == 1) & (dir_binary == 1))] = 1
 
         if display:
-            self.display_image_grid(filename, [image_conv_gray, image_conv, gradx, grady, mag_binary, dir_binary, combined], ['gray', 'hls (s chan)', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
+            self.display_image_grid(filename, [image, image_conv_roi, gradx, grady, mag_binary, dir_binary, combined], ['image_conv', 'image_roi', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
 
         return combined
 

@@ -45,11 +45,11 @@ def run():
         #pt = PerspectiveTransform(config, load_saved_trans_matrix=False)
         #pt.selfdiag()
 
-        pipeline = Pipeline(config)
-        pipeline.selfdiag()
+        #pipeline = Pipeline(config)
+        #pipeline.selfdiag()
 
-        #vid = VideoRender(config, 'data/test_videos/project_video.mp4')
-        #vid.play()
+        vid = VideoRender(config, 'data/test_videos/project_video.mp4')
+        vid.play()
 
         pass
 
