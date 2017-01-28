@@ -146,9 +146,12 @@ class Line(ImageProcessing):
         image_width = persp_image.shape[1]
 
         # Fit a second order polynomial to each lane line ...
-        xvals_polyfit = np.polyfit(self.__yvals, self.__xvals, 2)
+        # force extend yvals to top
         yvals_extended = np.append(self.__yvals, np.asarray([0])).flatten()
+        # force extend yvals to bottom
         yvals_extended = np.append(np.asarray([image_height]), yvals_extended).flatten()
+
+        xvals_polyfit = np.polyfit(self.__yvals, self.__xvals, 2)
         xvals_polyfitx = xvals_polyfit[0] * yvals_extended ** 2 + xvals_polyfit[1] * yvals_extended + xvals_polyfit[2]
 
         # Plot the left and right lane pixes ...
@@ -168,6 +171,7 @@ class Line(ImageProcessing):
         self.__detected = True
 
         self.__line_fit_image = "{0}/tmp/frame_{1}.png".format(self.__output_directory, self.frame_no())
+        plt.plot(self.__histogram)
         plt.savefig(self.__line_fit_image)
 
         return

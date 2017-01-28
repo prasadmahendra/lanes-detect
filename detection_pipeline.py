@@ -57,7 +57,7 @@ class Pipeline(ImageProcessing):
         persp_image_plot, img_with_lines = self.draw_lane_lines(image, persp_image)
 
         self.display_image_grid('detection-pipeline.jpg', [image, image_undistort, thresholded_image, persp_image, persp_image_plot, img_with_lines], ['image', 'image_undistort', 'thresholded', 'perspective', 'persp_image_plot', 'img_with_lines'], cmap='gray', save=self.save_output_images())
-        return image
+        return img_with_lines
 
     def undistort(self, image):
         return self.__cam_calibrate.undistort(image)

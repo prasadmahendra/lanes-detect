@@ -21,10 +21,10 @@ class ImageProcessing(object):
 
     def test_files(self):
         image_files = [
+         'projectvid_42.jpg',
          'straight_lines1.jpg',
-         'projectvid_25.jpg',
-         'projectvid_24.jpg',
-         'projectvid_23.jpg']
+         'projectvid_40.jpg',
+         'projectvid_41.jpg']
          #'straight_lines2.jpg',
          #'test1.jpg',
          #'test2.jpg',
@@ -73,8 +73,6 @@ class ImageProcessing(object):
                 masked = self.region_of_interest(image)
                 #self.display_image(masked)
 
-            #self.display_image_grid('harder_challenge_vid_14.jpg', [gray, hls, hsv], ['gray', 'hls', 'hsv'], cmap='gray')
-            #self.display_image_grid('harder_challenge_vid_14.jpg', [gray_r, hls_s, hsv_s], ['gray r', 'hls s', 'hsv s'], cmap='gray')
             break
 
     def save_output_images(self):
@@ -121,6 +119,12 @@ class ImageProcessing(object):
 
         vertices = np.array([[(viewport_x_min, viewport_y_max),
                               (viewport_center_x - 100, viewport_lane_horizon_y),
+                              (viewport_center_x, viewport_lane_horizon_y),
+                              (viewport_center_x, viewport_lane_horizon_y + 50),
+                              (viewport_x_min + 200, viewport_y_max),
+                              (viewport_x_max - 200, viewport_y_max),
+                              (viewport_center_x, viewport_lane_horizon_y + 50),
+                              (viewport_center_x, viewport_lane_horizon_y),
                               (viewport_center_x + 150, viewport_lane_horizon_y),
                               (viewport_x_max, viewport_y_max)]], dtype=np.int32)
 
@@ -310,7 +314,7 @@ class ImageThresholding(ImageProcessing):
             image = self.process(image, filename)
 
     def process(self, image, filename=None, display=True):
-        image_conv = self.to_hls(image, to_binary=True, chan='S', threshold=(75, 255))
+        image_conv = self.to_hls(image, to_binary=True, chan='S', threshold=(90, 255))
         ksize = 3
 
         image_conv_roi = self.region_of_interest(image_conv)
