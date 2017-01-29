@@ -93,13 +93,6 @@ class Pipeline(ImageProcessing):
         # Draw the lane onto the warped blank image
         cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
 
-        #if r_lane.is_generated():
-        #    print("here! 1")
-        #    cv2.polylines(color_warp, np.int_(pts_right), 10, (255, 0, 0))
-        #if l_lane.is_generated():
-        #    print("here! 2")
-        #    cv2.polylines(color_warp, np.int_(pts_left), 10, (255, 0, 0))
-
         # Warp the blank back to original image space using inverse perspective matrix (Minv)
         newwarp = cv2.warpPerspective(color_warp, self.__perspective_tran.get_minv(), (undist_image.shape[1], undist_image.shape[0]))
 

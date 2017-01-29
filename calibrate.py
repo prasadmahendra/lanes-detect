@@ -99,6 +99,8 @@ class Calibrate(ImageProcessing):
 
 
     def undistort(self, img):
+        assert(img is not None)
+
         if self.__undistort_data == None:
             if not os.path.isfile(self.__undistort_data_file):
                 raise FileNotFoundError("Missing {0}".format(self.__undistort_data_file))

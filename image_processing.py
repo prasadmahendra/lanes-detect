@@ -16,27 +16,9 @@ class ImageProcessing(object):
 
     def test_files(self):
         image_files = [
-         'projectvid_1030.jpg',
-         'projectvid_1031.jpg',
-         'projectvid_1032.jpg',
-         'projectvid_1033.jpg',
-         'projectvid_1034.jpg',
-         'projectvid_1035.jpg',
-         'projectvid_1036.jpg',
-         'projectvid_1037.jpg',
-         'projectvid_1038.jpg',
-         'projectvid_1039.jpg',
-         'projectvid_1040.jpg',
-         'projectvid_1041.jpg',
-         'projectvid_1042.jpg',
-         'projectvid_1043.jpg',
-         'projectvid_1044.jpg',
-         'projectvid_1045.jpg',
-         'projectvid_1046.jpg',
-         'projectvid_1047.jpg',
-         'projectvid_1048.jpg',
-         'projectvid_1049.jpg',
-         'projectvid_1050.jpg',
+         'projectvid_23.jpg',
+         'projectvid_24.jpg',
+         'projectvid_25.jpg',
          'straight_lines1.jpg',
          'straight_lines2.jpg',
          'test1.jpg',
@@ -181,7 +163,9 @@ class ImageProcessing(object):
         raise NotImplementedError("process() def must be overridden!")
 
     def load_image(self, path):
-        return cv2.imread(path)
+        img = cv2.imread(path)
+        assert(img is not None)
+        return img
 
     def to_grayscale(self, image, to_binary=False, chan='R', threshold=(0, 255)):
         """If you are reading in an image using mpimg.imread() this will read in an RGB image and you should convert to grayscale

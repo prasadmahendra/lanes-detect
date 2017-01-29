@@ -23,12 +23,12 @@ class PerspectiveTransform(ImageProcessing):
         self.__Minv = None
 
         if self.__load_saved_trans_matrix:
-            self.__init()
+            self.init()
 
     def selfdiag(self):
-        self.__init()
+        self.init()
 
-    def __init(self, image=None):
+    def init(self, image=None):
         save_path = "{0}/results/perspective_trans/trans_matrix.pickle".format(self.__data_dir)
         if self.__load_saved_trans_matrix == False:
             path = "{0}/{1}".format(self.__test_dir, "straight_lines1.jpg")
