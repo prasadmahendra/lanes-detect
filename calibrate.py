@@ -34,7 +34,6 @@ class CalibrateImage(ImageProcessing):
             # Draw and display the corners
             img_with_corners_drawn = self.load_image(self.__fullpath)
             cv2.drawChessboardCorners(img_with_corners_drawn, (self.__img_obj_pts_x, self.__img_obj_pts_y), corners, ret)
-            plt.imsave('{0}/corners/{1}'.format(self.__output_images_dir, self.name()), img_with_corners_drawn, cmap=cm.gray)
 
             # generate object points based on number of chessboard (inside) corners
             objp = np.zeros((self.__img_obj_pts_x * self.__img_obj_pts_y, 3), np.float32)
@@ -55,20 +54,20 @@ class CalibrateImage(ImageProcessing):
             # undistort the original image using the camera matrix and distortion co-efficients
             undistorted_img = cv2.undistort(img, mtx, dist, None, mtx)
 
-            plt.imsave('{0}/undistorted/{1}'.format(self.__output_images_dir, self.name()), undistorted_img, cmap=cm.gray)
-
             # save mtx, dist, rvecs, tvecs
             pickle_filename = '{0}/calibration_data/{1}.pickle'.format(self.__results_dir, self.name())
             pickle.dump([mtx, dist, rvecs, tvecs], open(pickle_filename, "wb"))
 
+            self.display_image_grid("camera_cal", self.name(), [img, img_with_corners_drawn, undistorted_img], ['orig image', 'img_with_corners_drawn', 'undistorted_img'], cmap='gray', save=self.save_output_images())
         else:
             self.__logger.debug("chess board corners not found on {0} nx: {1} ny: {2}".format(self.name(), self.__img_obj_pts_x, self.__img_obj_pts_y))
 
 
-class Calibrate(object):
+class Calibrate(ImageProcessing):
     __logger = logging.getLogger(__name__)
 
     def __init__(self, config):
+        super(Calibrate, self).__init__(config)
         self.__config = config
         self.__data_dir = config.get('camera_calibration', 'data_directory')
         self.__results_dir = '{0}/results'.format(self.__data_dir)
@@ -108,8 +107,4 @@ class Calibrate(object):
         (mtx, dist, _, _) =  self.__undistort_data
         undistorted_img = cv2.undistort(img, mtx, dist, None, mtx)
         return undistorted_img
-
-    def __display_image(self, image):
-        plt.imshow(image)
-        plt.show()
 

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description='Road Lanes detection')
 
-parser.add_argument('-vidfile', help='video file to process')
+parser.add_argument('-video', default='data/test_videos/project_video.mp4', help='video file to process')
 parser.add_argument('-cmd', default='selfdiag', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect'])
 parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
 
@@ -29,36 +29,33 @@ def run():
     config.read("settings.ini")
     logger.info("Running cmd: %s" % (args.cmd))
 
+    args.cmd = 'detect'
+
     if args.cmd == "selfdiag":
-        #cam_calib = Calibrate(config)
-        #cam_calib.selfdiag()
+        cam_calib = Calibrate(config)
+        cam_calib.selfdiag()
 
-        #ip = ImageProcessing(config)
-        #ip.selfdiag()
+        ip = ImageProcessing(config)
+        ip.selfdiag()
 
-        #ip = ImageCannyEdgeDetection(config)
-        #ip.selfdiag()
+        ip = ImageCannyEdgeDetection(config)
+        ip.selfdiag()
 
-        #ip = ImageThresholding(config)
-        #ip.selfdiag()
+        ip = ImageThresholding(config)
+        ip.selfdiag()
 
-        #pt = PerspectiveTransform(config, load_saved_trans_matrix=False)
-        #pt.selfdiag()
+        pt = PerspectiveTransform(config, load_saved_trans_matrix=False)
+        pt.selfdiag()
 
-        #pipeline = Pipeline(config)
-        #pipeline.selfdiag()
-
-        vid = VideoRender(config, 'data/test_videos/project_video.mp4')
-        vid.play()
-
-        pass
+        pipeline = Pipeline(config)
+        pipeline.selfdiag()
 
     elif args.cmd == "calib":
         cam_calib = Calibrate(config)
         cam_calib.calibrate()
 
     elif args.cmd == "detect":
-        # TODO
-        pass
+        vid = VideoRender(config, args.video)
+        vid.play()
 
 run()

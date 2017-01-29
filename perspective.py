@@ -61,7 +61,7 @@ class PerspectiveTransform(ImageProcessing):
             cv2.line(corrected, tuple(src[0]), tuple(src[1]), color, thickness)
             cv2.line(corrected, tuple(src[2]), tuple(src[3]), color, thickness)
 
-            self.display_image_grid('perspective_correction.jpg', [image, corrected, warped, warped_inv], ['image', 'corrected', 'warped', 'warped_inv'], save=self.save_output_images())
+            self.display_image_grid('perspective', 'perspective_correction.jpg', [image, corrected, warped, warped_inv], ['image', 'corrected', 'warped', 'warped_inv'], save=self.save_output_images())
         else:
             if self.__data_loaded == False:
                 self.__M, self.__Minv = pickle.load(open(save_path, 'rb'))

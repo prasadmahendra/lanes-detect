@@ -1,13 +1,8 @@
 import logging
-import os
 import cv2
-import pickle
 import numpy as np
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-from tqdm import tqdm
-
+import math
 
 class ImageProcessing(object):
     __logger = logging.getLogger(__name__)
@@ -21,26 +16,44 @@ class ImageProcessing(object):
 
     def test_files(self):
         image_files = [
-         'projectvid_42.jpg',
+         'projectvid_1030.jpg',
+         'projectvid_1031.jpg',
+         'projectvid_1032.jpg',
+         'projectvid_1033.jpg',
+         'projectvid_1034.jpg',
+         'projectvid_1035.jpg',
+         'projectvid_1036.jpg',
+         'projectvid_1037.jpg',
+         'projectvid_1038.jpg',
+         'projectvid_1039.jpg',
+         'projectvid_1040.jpg',
+         'projectvid_1041.jpg',
+         'projectvid_1042.jpg',
+         'projectvid_1043.jpg',
+         'projectvid_1044.jpg',
+         'projectvid_1045.jpg',
+         'projectvid_1046.jpg',
+         'projectvid_1047.jpg',
+         'projectvid_1048.jpg',
+         'projectvid_1049.jpg',
+         'projectvid_1050.jpg',
          'straight_lines1.jpg',
-         'projectvid_40.jpg',
-         'projectvid_41.jpg']
-         #'straight_lines2.jpg',
-         #'test1.jpg',
-         #'test2.jpg',
-         #'test3.jpg',
-         #'test4.jpg',
-         #'test5.jpg',
-         #'test6.jpg']
-         #'challenge_vid_5.jpg',
-         #'harder_challenge_vid_2.jpg',
-         #'harder_challenge_vid_4.jpg',
-         #'harder_challenge_vid_6.jpg',
-         #'harder_challenge_vid_8.jpg',
-         #'harder_challenge_vid_9.jpg',
-         #'harder_challenge_vid_12.jpg',
-         #'harder_challenge_vid_13.jpg',
-         #'harder_challenge_vid_14.jpg']
+         'straight_lines2.jpg',
+         'test1.jpg',
+         'test2.jpg',
+         'test3.jpg',
+         'test4.jpg',
+         'test5.jpg',
+         'test6.jpg',
+         'challenge_vid_5.jpg',
+         'harder_challenge_vid_2.jpg',
+         'harder_challenge_vid_4.jpg',
+         'harder_challenge_vid_6.jpg',
+         'harder_challenge_vid_8.jpg',
+         'harder_challenge_vid_9.jpg',
+         'harder_challenge_vid_12.jpg',
+         'harder_challenge_vid_13.jpg',
+         'harder_challenge_vid_14.jpg']
 
         for image_file in image_files:
             yield [image_file, "{0}/{1}".format(self.__test_images_directory, image_file)]
@@ -70,7 +83,10 @@ class ImageProcessing(object):
             for filename, file in self.test_files():
                 image = self.load_image(file)
                 assert(image is not None)
-                masked = self.region_of_interest(image)
+                masked = self.region_of_interest(image, binary_image=False)
+                assert (masked is not None)
+                masked = self.region_of_interest(image, binary_image=True)
+                assert (masked is not None)
                 #self.display_image(masked)
 
             break
@@ -82,32 +98,40 @@ class ImageProcessing(object):
         plt.imshow(image, cmap=cmap)
         plt.show()
 
-    def display_image_grid(self, filename, images, titles, cmap=None, save=False):
+    def display_image_grid(self, subfolder, filename, images, titles, cmap=None, save=False):
         plt.close()
         output_images_enabled = self.__config.getboolean('global', 'output_images_enabled')
         if output_images_enabled == False:
             return
 
-        fig, axn = plt.subplots(1, len(images), figsize=(24, 9))
+        rows = math.ceil(len(images) / 4)
+
+        fig, axn = plt.subplots(rows, min(len(images), 4), figsize=(24, 9))
         fig.tight_layout()
 
         for i in range(len(images)):
-            axn[i].imshow(images[i], cmap=cmap)
-            axn[i].set_title(titles[i], fontsize=40)
+            if rows == 1:
+                axn[i].imshow(images[i], cmap=cmap)
+                axn[i].set_title(titles[i], fontsize=40)
+            else:
+                y = math.floor(i / 4)
+                x = i % 4
+                axn[y][x].imshow(images[i], cmap=cmap)
+                axn[y][x].set_title(titles[i], fontsize=40)
 
         plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
+        plt.suptitle(filename)
 
         if save == True:
-            self.__logger.info("saving {0}/thresholded/{1}".format(self.__output_images_dir, filename))
-            fig.savefig("{0}/thresholded/{1}".format(self.__output_images_dir, filename))
+            self.__logger.info("saving {0}/{1}/{2}".format(self.__output_images_dir, subfolder, filename))
+            fig.savefig("{0}/{1}/{2}".format(self.__output_images_dir, subfolder, filename))
         else:
-            plt.suptitle(filename)
             plt.show()
 
     def engine_compart_pixes(self):
         return 50
 
-    def region_of_interest(self, image):
+    def region_of_interest(self, image, binary_image):
         image_height = image.shape[0]
         image_width = image.shape[1]
 
@@ -133,9 +157,15 @@ class ImageProcessing(object):
         # defining a 3 channel or 1 channel color to fill the mask with depending on the input image
         if len(image.shape) > 2:
             channel_count = image.shape[2]  # i.e. 3 or 4 depending on your image
-            ignore_mask_color = (255,) * channel_count
+            if binary_image:
+                ignore_mask_color = (1,) * channel_count
+            else:
+                ignore_mask_color = (255,) * channel_count
         else:
-            ignore_mask_color = 255
+            if binary_image:
+                ignore_mask_color = 1
+            else:
+                ignore_mask_color = 255
 
         # filling pixels inside the polygon defined by "vertices" with the fill color
         cv2.fillPoly(mask, vertices, ignore_mask_color)
@@ -271,11 +301,11 @@ class ImageCannyEdgeDetection(ImageProcessing):
         img_gaussian = self.gaussian_blur(img_gray, 3)
         img_canny_edge = self.canny(img_gaussian)
 
-        img_masked = self.region_of_interest(img_canny_edge)
+        img_masked = self.region_of_interest(img_canny_edge, binary_image=False)
 
         hough_lines_image = self.hough_lines(img_masked, rho=2, theta=np.pi / 180, threshold=self.__hough_threshold, min_line_len=self.__hough_min_line_len, max_line_gap=self.__hough_max_line_gap, y_min=0)
 
-        self.display_image_grid("canny_{0}".format(filename), [image, img_masked, hough_lines_image], ['hls', 'canny', 'hough'], cmap='gray', save=self.save_output_images())
+        self.display_image_grid("thresholded", "canny_{0}".format(filename), [image, img_masked, hough_lines_image], ['hls', 'canny', 'hough'], cmap='gray', save=self.save_output_images())
 
         return hough_lines_image
 
@@ -317,18 +347,16 @@ class ImageThresholding(ImageProcessing):
         image_conv = self.to_hls(image, to_binary=True, chan='S', threshold=(90, 255))
         ksize = 3
 
-        image_conv_roi = self.region_of_interest(image_conv)
-
-        gradx = self.abs_sobel_thresh(image_conv_roi, orient='x', sobel_kernel=ksize, thresh=(20, 255))
-        grady = self.abs_sobel_thresh(image_conv_roi, orient='y', sobel_kernel=ksize, thresh=(20, 255))
-        mag_binary = self.mag_thresh(image_conv_roi, sobel_kernel=ksize, mag_thresh=(20, 255))
-        dir_binary = self.dir_threshold(image_conv_roi, sobel_kernel=ksize, thresh=(0.7, 1.3))
+        gradx = self.abs_sobel_thresh(image_conv, orient='x', sobel_kernel=ksize, thresh=(20, 255))
+        grady = self.abs_sobel_thresh(image_conv, orient='y', sobel_kernel=ksize, thresh=(20, 255))
+        mag_binary = self.mag_thresh(image_conv, sobel_kernel=ksize, mag_thresh=(20, 255))
+        dir_binary = self.dir_threshold(image_conv, sobel_kernel=ksize, thresh=(0.7, 1.3))
 
         combined = np.zeros_like(dir_binary)
         combined[((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
 
         if display:
-            self.display_image_grid(filename, [image, image_conv_roi, gradx, grady, mag_binary, dir_binary, combined], ['image_conv', 'image_roi', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
+            self.display_image_grid('thresholded', filename, [image, image_conv, gradx, grady, mag_binary, dir_binary, combined], ['image', 'image_conv', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
 
         return combined
 
