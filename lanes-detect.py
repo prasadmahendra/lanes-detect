@@ -1,4 +1,5 @@
 
+import cv2
 import argparse
 import logging
 import configparser
@@ -16,6 +17,7 @@ parser = argparse.ArgumentParser(description='Road Lanes detection')
 parser.add_argument('-video', default='data/test_videos/project_video.mp4', help='video file to process')
 parser.add_argument('-cmd', default='selfdiag', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect'])
 parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
+parser.add_argument('-imagefile', default='data/test_images/test4.jpg', help='image file (path) to process')
 
 args = parser.parse_args()
 
@@ -57,5 +59,16 @@ def run():
     elif args.cmd == "detect":
         vid = VideoRender(config, args.video)
         vid.play()
+
+    elif args.cmd == 'undistort':
+        cam_calib = Calibrate(config)
+        ip = ImageProcessing(config)
+        image_orig = cv2.imread(args.imagefile)
+        image_undistort = cam_calib.undistort(image_orig)
+
+        image_orig = cv2.cvtColor(image_orig, cv2.COLOR_BGR2RGB)
+        image_undistort = cv2.cvtColor(image_undistort, cv2.COLOR_BGR2RGB)
+        ip.display_image_grid('camera_cal', 'undistorted.jpg', [image_orig, image_undistort], ['orig', 'undistorted'], save=True)
+
 
 run()
