@@ -43,8 +43,10 @@ class PerspectiveTransform(ImageProcessing):
             color = [255, 0, 0]
             thickness = 5
 
-            src = np.float32([[280, 675], [575, 465], [1045, 675], [715, 465]])
-            dst = np.float32([[280, 675], [280, 0], [1045, 675], [1045, 0]])
+            x_min = 280
+            x_max = 1045
+            src = np.float32([[x_min, 675], [575, 465], [x_max, 675], [715, 465]])
+            dst = np.float32([[x_min, 675], [x_min, 0], [x_max, 675], [x_max, 0]])
 
             self.__M = cv2.getPerspectiveTransform(src, dst)
             self.__Minv = cv2.getPerspectiveTransform(dst, src)

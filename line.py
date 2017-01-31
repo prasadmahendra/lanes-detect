@@ -113,16 +113,16 @@ class LinesCollection(object):
         curverad_diff_perc = self.curve_rad_diff(left_line, prev_lane_l)
         if  curverad_diff_perc > 1000:
             # discard ....
+            self.__logger.warning("Line {0} dropped. curverad_diff_perc: {1} ({2} - {3})".format(left_line.rol(), curverad_diff_perc, left_line.curve_rad(), prev_lane_l.curve_rad()))
             self.__dropped_left_lanes_count += 1
             left_line = prev_lane_l
-            self.__logger.warning("Line {0} dropped. curverad_diff_perc: {1} ({2} - {3})".format(left_line.rol(), curverad_diff_perc, left_line.curve_rad(), prev_lane_l.curve_rad()))
 
         curverad_diff_perc = self.curve_rad_diff(right_line, prev_lane_r)
         if  curverad_diff_perc > 1000:
             # discard ....
+            self.__logger.warning("Line {0} dropped. curverad_diff_perc: {1} ({2} - {3})".format(right_line.rol(), curverad_diff_perc, right_line.curve_rad(), prev_lane_r.curve_rad()))
             self.__dropped_right_lanes_count += 1
             right_line = prev_lane_r
-            self.__logger.warning("Line {0} dropped. curverad_diff_perc: {1} ({2} - {3})".format(right_line.rol(), curverad_diff_perc, right_line.curve_rad(), prev_lane_r.curve_rad()))
 
         polyfit_l = np.copy(left_line.polyfit())
         polyfit_r = np.copy(right_line.polyfit())
@@ -133,7 +133,7 @@ class LinesCollection(object):
 
         prev_frame = 0
         samples = 1
-        while len(self.__left_lane_lines) > prev_frame and len(self.__right_lane_lines) > prev_frame and prev_frame < self.__line_averages_over:
+        while prev_frame < len(self.__left_lane_lines) and prev_frame < len(self.__right_lane_lines) and prev_frame < self.__line_averages_over:
             prev_lane_l = self.__left_lane_lines[prev_frame]
             prev_lane_r = self.__right_lane_lines[prev_frame]
 
@@ -247,6 +247,13 @@ class Line(ImageProcessing):
 
         self.__generated = False
 
+    def copy(self):
+        config = self.__config
+        self.__config = None
+        cpy = copy.deepcopy(self)
+        cpy.__config = config
+        return cpy
+
     def set_generated(self, gen):
         self.__generated = gen
 
@@ -357,16 +364,14 @@ class Line(ImageProcessing):
         return self.__curverad
 
     def determine_curvature(self, image, xvals, yvals):
-        image_height = image.shape[0]
-        image_width = image.shape[1]
-
         # Define y-value where we want radius of curvature. Choose the maximum y-value, corresponding to the bottom of the image
         y_eval = np.max(yvals)
 
         fit_cr = np.polyfit(yvals * self.__ym_per_pix, xvals * self.__xm_per_pix, 2)
 
-        curverad = ((1 + (2 * fit_cr[0] * y_eval + fit_cr[1]) ** 2) ** 1.5) \
-                        / np.absolute(2 * fit_cr[0])
+        # take the curvature of the line at the midpoint (y_eval / 2.)
+        curverad = ((1 + (2 * fit_cr[0] * y_eval / 2. + fit_cr[1]) ** 2) ** 1.5) \
+                   / np.absolute(2 * fit_cr[0])
 
         return curverad
 
@@ -446,14 +451,14 @@ class Line(ImageProcessing):
 
     def right_shift(self):
         self.__logger.info("Swap lines L -> R. Frame: %s", self.__frame_no)
-        new_line = copy.deepcopy(self)
+        new_line = self.copy()
         new_line.__xvals = new_line.__xvals + (self.meters_per_pixel_x() * self.lane_width())
         new_line.__rol = 'right'
         return new_line
 
     def left_shift(self):
         self.__logger.info("Swap lines L <- R. Frame: %s", self.__frame_no)
-        new_line = copy.deepcopy(self)
+        new_line = self.copy()
         new_line.__xvals = new_line.__xvals - (self.meters_per_pixel_x() * self.lane_width())
         new_line.__rol = 'left'
         return new_line
