@@ -2,4 +2,7 @@
 
 Track 1:
 
-[![IMAGE ALT TEXT](http://img.youtube.com/vi/I8jvc2j2fCQ/0.jpg)](https://youtu.be/I8jvc2j2fCQ "Track 1 Results")
+[![Track 1](http://img.youtube.com/vi/I8jvc2j2fCQ/0.jpg)](https://youtu.be/I8jvc2j2fCQ "Track 1 Results")
+
+![Track 1 Processing Pipeline](./data/output_images/detection-pipeline/frame-1.jpg)
+
