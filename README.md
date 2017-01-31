@@ -2,4 +2,4 @@
 
 Track 1:
 
-[![IMAGE ALT TEXT](http://img.youtube.com/vi/iLo-VoiQDJA/0.jpg)](http://www.youtube.com/watch?v=iLo-VoiQDJA "Track 1 Results")
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/I8jvc2j2fCQ/0.jpg)](https://youtu.be/I8jvc2j2fCQ "Track 1 Results")

@@ -16,9 +16,9 @@ class ImageProcessing(object):
 
     def test_files(self):
         image_files = [
-         'projectvid_23.jpg',
-         'projectvid_24.jpg',
-         'projectvid_25.jpg',
+         'projectvid_1.jpg',
+         'projectvid_2.jpg',
+         'projectvid_3.jpg',
          'straight_lines1.jpg',
          'straight_lines2.jpg',
          'test1.jpg',
@@ -27,15 +27,7 @@ class ImageProcessing(object):
          'test4.jpg',
          'test5.jpg',
          'test6.jpg',
-         'challenge_vid_5.jpg',
-         'harder_challenge_vid_2.jpg',
-         'harder_challenge_vid_4.jpg',
-         'harder_challenge_vid_6.jpg',
-         'harder_challenge_vid_8.jpg',
-         'harder_challenge_vid_9.jpg',
-         'harder_challenge_vid_12.jpg',
-         'harder_challenge_vid_13.jpg',
-         'harder_challenge_vid_14.jpg']
+         'challenge_vid_5.jpg']
 
         for image_file in image_files:
             yield [image_file, "{0}/{1}".format(self.__test_images_directory, image_file)]
@@ -127,8 +119,8 @@ class ImageProcessing(object):
                               (viewport_center_x - 100, viewport_lane_horizon_y),
                               (viewport_center_x, viewport_lane_horizon_y),
                               (viewport_center_x, viewport_lane_horizon_y + 50),
-                              (viewport_x_min + 200, viewport_y_max),
-                              (viewport_x_max - 200, viewport_y_max),
+                              (viewport_x_min + 250, viewport_y_max),
+                              (viewport_x_max - 250, viewport_y_max),
                               (viewport_center_x, viewport_lane_horizon_y + 50),
                               (viewport_center_x, viewport_lane_horizon_y),
                               (viewport_center_x + 150, viewport_lane_horizon_y),
@@ -328,7 +320,24 @@ class ImageThresholding(ImageProcessing):
             image = self.process(image, filename)
 
     def process(self, image, filename=None, display=True):
-        image_conv = self.to_hls(image, to_binary=True, chan='S', threshold=(90, 255))
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        # extract yellow ....
+        yellow = cv2.inRange(hsv, (20, 100, 100), (50, 255, 255))
+
+        # extract white ....
+        sensitivity_1 = 68
+        white_1 = cv2.inRange(hsv, (0, 0, 255 - sensitivity_1), (255, 20, 255))
+
+        sensitivity_2 = 60
+        hsl = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+        white_2 = cv2.inRange(hsl, (0, 255 - sensitivity_2, 0), (255, 255, sensitivity_2))
+        white_3 = cv2.inRange(image, (200, 200, 200), (255, 255, 255))
+        white = white_1 | white_2 | white_3
+
+        hls_2 = self.to_hls(image, to_binary=True, chan='S', threshold=(90, 255))
+        image_conv = hls_2 | yellow | white
+
         ksize = 3
 
         gradx = self.abs_sobel_thresh(image_conv, orient='x', sobel_kernel=ksize, thresh=(20, 255))
@@ -340,7 +349,9 @@ class ImageThresholding(ImageProcessing):
         combined[((gradx == 1) & (grady == 1)) | ((mag_binary == 1) & (dir_binary == 1))] = 1
 
         if display:
-            self.display_image_grid('thresholded', filename, [image, image_conv, gradx, grady, mag_binary, dir_binary, combined], ['image', 'image_conv', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
+            self.display_image_grid('thresholded', filename,
+                                    [image, hls_2, yellow, white, gradx, grady, mag_binary, dir_binary, combined],
+                                    ['image', 'hls_2', 'yellow', 'white', 'gradx', 'grady', 'mag_binary', 'dir_binary', 'combined'], cmap='gray', save=self.save_output_images())
 
         return combined
 
