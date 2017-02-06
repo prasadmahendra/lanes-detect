@@ -1,5 +1,7 @@
 import logging
+import os
 import cv2
+import zipfile
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -252,6 +254,13 @@ class ImageProcessing(object):
         binary = np.zeros_like(image)
         binary[(image > threshold[0]) & (image <= threshold[1])] = 1
         return binary
+
+    def unzip(self, zippedfile, outfolder):
+        with zipfile.ZipFile(zippedfile) as zf:
+            for member in zf.infolist():
+                if not member.filename.startswith("__MACOSX"):
+                    self.__logger.info("Extracting {0}/{1}".format(outfolder, member.filename))
+                    zf.extract(member, outfolder)
 
 class ImageCannyEdgeDetection(ImageProcessing):
     def __init__(self, config):
