@@ -1,4 +1,3 @@
-
 import cv2
 import argparse
 import logging
@@ -16,9 +15,9 @@ logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(description='Road Lanes detection')
 
 parser.add_argument('-video', default='data/test_videos/project_video.mp4', help='video file to process')
-parser.add_argument('-cmd', default='vehicle-detect-train', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect', 'vehicle-detect-train'])
+parser.add_argument('-cmd', default='vehicle-detect-predict', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect', 'vehicle-detect-train', 'vehicle-detect-predict'])
 parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
-parser.add_argument('-imagefile', default='data/test_images/test4.jpg', help='image file (path) to process')
+parser.add_argument('-imagefile', default='data/test_images/image0010.png', help='image file (path) to process')
 
 args = parser.parse_args()
 
@@ -77,6 +76,16 @@ def run():
     elif args.cmd == 'vehicle-detect-train':
         vdetect = VehicleDetection(config)
         vdetect.train()
+
+    elif args.cmd == 'vehicle-detect-predict':
+        ip = ImageProcessing(config)
+        image = ip.load_image(args.imagefile)
+        vdetect = VehicleDetection(config)
+        p = vdetect.predict(image)
+        if p == 1:
+            print("It's a Car!")
+        else:
+            print("I see no Cars!")
 
 
 run()

@@ -3,23 +3,31 @@ import urllib.request
 import logging
 import cv2
 import glob
+import pickle
+import time
+import json
 from tqdm import tqdm
 import numpy as np
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import StandardScaler
 from skimage.feature import hog
 from image_processing import ImageProcessing
+from sklearn.model_selection import train_test_split
 
 class VehicleDetection(ImageProcessing):
     __logger = logging.getLogger(__name__)
 
     def __init__(self, config):
         super(VehicleDetection, self).__init__(config)
+        self.__classifier = config.get('vehicle_detection', 'classifier')
         self.__vehicles_training_data_src = config.get('vehicle_detection', 'vehicles_training_data')
         self.__non_vehicles_training_data_src = config.get('vehicle_detection', 'non_vehicles_training_data')
         self.__training_data_folder = config.get('vehicle_detection', 'training_data_folder')
         self.__vehicles_training_data = "{0}/vehicles.zip".format(self.__training_data_folder)
         self.__non_vehicles_training_data = "{0}/non_vehicles.zip".format(self.__training_data_folder)
+        self.__model_image_input_height = config.getint('vehicle_detection', 'training_image_height')
+        self.__model_image_input_width = config.getint('vehicle_detection', 'training_image_width')
 
         self.__hog_colorspace = config.get('hog_feature_extraction', 'colorspace')
         self.__hog_orient = config.getint('hog_feature_extraction', 'orient')
@@ -27,41 +35,132 @@ class VehicleDetection(ImageProcessing):
         self.__hog_cell_per_block = config.getint('hog_feature_extraction', 'cell_per_block')
         self.__hog_channel = config.get('hog_feature_extraction', 'channel')
 
+        self.__colorspace_spatial_size = tuple(json.loads(config.get('color_feature_extraction', 'spatial_size')))
+        self.__colorspace_hist_bins = config.getint('color_feature_extraction', 'hist_bins')
+        self.__colorspace_hist_range = tuple(json.loads(config.get('color_feature_extraction', 'hist_range')))
+
         self.__feature_extraction_type = config.get('vehicle_detection', 'feature_extraction_type')
+        self.__include_color_features = False
+        if self.__feature_extraction_type == "both":
+            self.__include_color_features = True
+        self.__classifier_obj = None
 
     def selfdiag(self):
         self.__logger.info("Training ...")
         self.__logger.info("Feature extraction: {}".format(self.__feature_extraction_type))
         (vehicle_images, non_vehicle_images) = self.__download_train_dataset()
 
-        assert(vehicle_images is not None)
+        assert (vehicle_images is not None)
         assert (non_vehicle_images is not None)
+
+        car = self.load_image(vehicle_images[0])
+        nocar = self.load_image(non_vehicle_images[0])
+
+        assert (car is not None)
+        assert (nocar is not None)
+
+        features, gray_hog = self.__get_hog_features(img=self.to_grayscale(car, to_binary=False),
+                                                     orient=self.__hog_orient,
+                                                     pix_per_cell=self.__hog_pix_per_cell,
+                                                     cell_per_block=self.__hog_pix_per_cell,
+                                                     vis=True)
+
+        features, h_hog = self.__get_hog_features(img=self.to_hls(car, to_binary=False, chan='H'),
+                                                     orient=self.__hog_orient,
+                                                     pix_per_cell=self.__hog_pix_per_cell,
+                                                     cell_per_block=self.__hog_pix_per_cell,
+                                                     vis=True)
+
+        features, l_hog = self.__get_hog_features(img=self.to_hls(car, to_binary=False, chan='L'),
+                                                     orient=self.__hog_orient,
+                                                     pix_per_cell=self.__hog_pix_per_cell,
+                                                     cell_per_block=self.__hog_pix_per_cell,
+                                                     vis=True)
+
+        features, s_hog = self.__get_hog_features(img=self.to_hls(car, to_binary=False, chan='S'),
+                                                     orient=self.__hog_orient,
+                                                     pix_per_cell=self.__hog_pix_per_cell,
+                                                     cell_per_block=self.__hog_pix_per_cell,
+                                                     vis=True)
+
+        self.display_image_grid('vehicle-detection/hog-features', 'car-hog-features.png', [car, gray_hog, h_hog, l_hog, s_hog], ['car image', 'gray_hog', 'h_hog', 'l_hog', 's_hog'], cmap='gray')
+
+        features, gray_hog = self.__get_hog_features(img=self.to_grayscale(nocar, to_binary=False),
+                                                     orient=self.__hog_orient,
+                                                     pix_per_cell=self.__hog_pix_per_cell,
+                                                     cell_per_block=self.__hog_pix_per_cell,
+                                                     vis=True)
+
+        features, h_hog = self.__get_hog_features(img=self.to_hls(nocar, to_binary=False, chan='H'),
+                                                  orient=self.__hog_orient,
+                                                  pix_per_cell=self.__hog_pix_per_cell,
+                                                  cell_per_block=self.__hog_pix_per_cell,
+                                                  vis=True)
+
+        features, l_hog = self.__get_hog_features(img=self.to_hls(nocar, to_binary=False, chan='L'),
+                                                  orient=self.__hog_orient,
+                                                  pix_per_cell=self.__hog_pix_per_cell,
+                                                  cell_per_block=self.__hog_pix_per_cell,
+                                                  vis=True)
+
+        features, s_hog = self.__get_hog_features(img=self.to_hls(nocar, to_binary=False, chan='S'),
+                                                  orient=self.__hog_orient,
+                                                  pix_per_cell=self.__hog_pix_per_cell,
+                                                  cell_per_block=self.__hog_pix_per_cell,
+                                                  vis=True)
+
+        self.display_image_grid('vehicle-detection/hog-features', 'nocar-hog-features.png', [nocar, gray_hog, h_hog, l_hog, s_hog], ['nocar image', 'gray_hog', 'h_hog', 'l_hog', 's_hog'], cmap='gray')
+
+    def predict(self, image):
+        if self.__classifier_obj is None:
+            saved_trained_classifier = "{0}/saved_trained_classifier.pickle".format(self.__training_data_folder)
+            self.__logger.info("loading saved classifier: {}".format(saved_trained_classifier))
+            self.__classifier_obj = pickle.load(open(saved_trained_classifier, "rb"))
+
+        image = cv2.resize(image, (self.__model_image_input_height, self.__model_image_input_width))
+        features = self.__extract_hog_features_ex(image,
+                                                  cspace=self.__hog_colorspace,
+                                                  orient=self.__hog_orient,
+                                                  pix_per_cell=self.__hog_pix_per_cell,
+                                                  cell_per_block=self.__hog_cell_per_block,
+                                                  hog_channel=self.__hog_channel,
+                                                  include_color_features=self.__include_color_features)
+
+        prediction = self.__classifier_obj.predict([features])
+        return prediction[0]
 
 
     def train(self):
         self.__logger.info("Training ...")
         self.__logger.info("Feature extraction: {}".format(self.__feature_extraction_type))
-        (vehicle_images, non_vehicle_images) = self.__download_train_dataset()
 
-        include_color_features = False
-        if self.__feature_extraction_type == "both":
-            include_color_features = True
+        saved_features_file = "{0}/saved_features.pickle".format(self.__training_data_folder)
+        saved_trained_classifier = "{0}/saved_trained_classifier.pickle".format(self.__training_data_folder)
 
-        car_features = self.__extract_hog_features(vehicle_images,
-                                                   cspace=self.__hog_colorspace,
-                                                   orient=self.__hog_orient,
-                                                   pix_per_cell=self.__hog_pix_per_cell,
-                                                   cell_per_block=self.__hog_cell_per_block,
-                                                   hog_channel=self.__hog_channel,
-                                                   include_color_features=include_color_features)
+        if not os.path.isfile(saved_features_file):
+            (vehicle_images, non_vehicle_images) = self.__download_train_dataset()
 
-        notcar_features = self.__extract_hog_features(non_vehicle_images,
-                                                      cspace=self.__hog_colorspace,
-                                                      orient=self.__hog_orient,
-                                                      pix_per_cell=self.__hog_pix_per_cell,
-                                                      cell_per_block=self.__hog_cell_per_block,
-                                                      hog_channel=self.__hog_channel,
-                                                      include_color_features=include_color_features)
+            car_features = self.__extract_hog_features(vehicle_images,
+                                                       cspace=self.__hog_colorspace,
+                                                       orient=self.__hog_orient,
+                                                       pix_per_cell=self.__hog_pix_per_cell,
+                                                       cell_per_block=self.__hog_cell_per_block,
+                                                       hog_channel=self.__hog_channel,
+                                                       include_color_features=self.__include_color_features)
+
+            notcar_features = self.__extract_hog_features(non_vehicle_images,
+                                                          cspace=self.__hog_colorspace,
+                                                          orient=self.__hog_orient,
+                                                          pix_per_cell=self.__hog_pix_per_cell,
+                                                          cell_per_block=self.__hog_cell_per_block,
+                                                          hog_channel=self.__hog_channel,
+                                                          include_color_features=self.__include_color_features)
+
+            self.__logger.info("Saving features file: {}".format(saved_features_file))
+            pickle.dump([car_features, notcar_features], open(saved_features_file, "wb"))
+        else:
+            self.__logger.info("loading saved features file: {}".format(saved_features_file))
+            [car_features, notcar_features] = pickle.load(open(saved_features_file, "rb"))
 
         # Create an array stack of feature vectors
         X = np.vstack((car_features, notcar_features)).astype(np.float64)
@@ -74,6 +173,52 @@ class VehicleDetection(ImageProcessing):
 
         # Define the labels vector
         y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+
+        # Split up data into randomized training and test sets
+        rand_state = np.random.randint(0, 100)
+        X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size=0.2, random_state=rand_state)
+
+        # Use a linear SVC
+        clf = self.__get_classifier()
+
+        # Check the training time for the SVC
+        t = time.time()
+        clf.fit(X_train, y_train)
+        t2 = time.time()
+
+        self.__logger.info("Time to train: {}".format(round(t2 - t, 2)))
+
+        # Check the score of the SVC
+        self.__logger.info("Test accuracy: {}".format(round(clf.score(X_test, y_test), 4)))
+
+        # Check the prediction time for a single sample
+        t = time.time()
+        n_predict = 10
+        self.__logger.info("SVC predicts: {}".format(clf.predict(X_test[0:n_predict])))
+        self.__logger.info("... for these {} labels: {}".format(n_predict, y_test[0:n_predict]))
+        t2 = time.time()
+
+        self.__logger.info("{} seconds to predict {} labels".format(round(t2 - t, 5), n_predict))
+
+        self.__logger.info("Saving classifier: {}".format(saved_trained_classifier))
+        pickle.dump(clf, open(saved_trained_classifier, "wb"))
+
+    def __get_classifier(self):
+        clf = None
+
+        if self.__classifier == 'LinearSVC':
+            self.__logger.info('Using LinearSVC classifier')
+            clf = LinearSVC()
+        elif self.__classifier == 'SVC':
+            self.__logger.info('Using SVC classifier')
+            clf = SVC(kernel='rbf', gamma='auto', C=1.0)
+        elif self.__classifier == 'DecisionTreeClassifier':
+            self.__logger.info('Using DecisionTreeClassifier classifier')
+            clf = DecisionTreeClassifier(min_samples_split=50, criterion='entropy')
+        else:
+            raise Exception("Unsupported classifier {}".format(self.__classifier))
+
+        return clf
 
     def __download_train_dataset(self):
         if not os.path.isfile(self.__vehicles_training_data):
@@ -178,56 +323,62 @@ class VehicleDetection(ImageProcessing):
 
         self.__logger.info("Extract HOG features. cspace: {}, orient: {}, pix_per_cell: {}, cell_per_block: {}, hog_channel: {} include_color_features: {}".format(cspace, orient, pix_per_cell, cell_per_block, hog_channel, include_color_features))
 
+        if include_color_features:
+            self.__logger.info("Extract color features. cspace: {}, spatial_size: {}, hist_bins: {}, hist_range: {}".format(cspace, self.__colorspace_spatial_size, self.__colorspace_hist_bins, self.__colorspace_hist_range))
+
         # Create a list to append feature vectors to
         features = []
 
         # Iterate through the list of images
         for file in tqdm(imgs):
-            # Read in each one by one
             image = self.load_image(file)
             assert (image is not None)
 
-            feature_image = None
-            # apply color conversion if other than 'RGB'
-            if cspace != 'RGB':
-                if cspace == 'HSV':
-                    feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-                elif cspace == 'LUV':
-                    feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
-                elif cspace == 'HLS':
-                    feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-                elif cspace == 'YUV':
-                    feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
-                elif cspace == 'YCrCb':
-                    feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
-            else:
-                feature_image = np.copy(image)
-
-            # Call get_hog_features() with vis=False, feature_vec=True
-            if hog_channel == 'ALL':
-                hog_features = []
-                for channel in range(feature_image.shape[2]):
-                    hog_features.append(self.__get_hog_features(feature_image[:,:,channel], orient, pix_per_cell, cell_per_block, vis=False, feature_vec=True))
-                hog_features = np.ravel(hog_features)
-            else:
-                hog_features = self.__get_hog_features(feature_image[:,:,int(hog_channel)], orient, pix_per_cell, cell_per_block, vis=False, feature_vec=True)
-
-            if include_color_features:
-                spatial_size = (32, 32)
-                hist_bins = 32
-                hist_range = (0, 256)
-
-                # Apply bin_spatial() to get spatial color features
-                spatial_features = self.__get_bin_spatial(feature_image, size=spatial_size)
-
-                # Apply color_hist() also with a color space option now
-                hist_features = self.__get_color_hist(feature_image, nbins=hist_bins, bins_range=hist_range)
-
-                # Append the new feature vector to the features list
-                features.append(np.concatenate((spatial_features, hist_features, hog_features)))
-            else:
-                # Append the new feature vector to the features list
-                features.append(hog_features)
+            image_features = self.__extract_hog_features_ex(image, cspace, orient, pix_per_cell, cell_per_block, hog_channel, include_color_features)
+            features.append(image_features)
 
         # Return list of feature vectors
         return features
+
+    def __extract_hog_features_ex(self, image, cspace='RGB', orient=9, pix_per_cell=8, cell_per_block=2, hog_channel=0, include_color_features=False):
+        feature_image = None
+        # apply color conversion if other than 'RGB'
+        if cspace != 'RGB':
+            if cspace == 'HSV':
+                feature_image = self.to_hsv(image, to_binary=False, chan='ALL')
+            elif cspace == 'LUV':
+                feature_image = self.to_luv(image, to_binary=False, chan='ALL')
+            elif cspace == 'HLS':
+                feature_image = self.to_hls(image, to_binary=False, chan='ALL')
+            elif cspace == 'YUV':
+                feature_image = self.to_yuv(image, to_binary=False, chan='ALL')
+            elif cspace == 'YCrCb':
+                feature_image = self.to_ycrcb(image, to_binary=False, chan='ALL')
+        else:
+            feature_image = np.copy(image)
+
+        # Call get_hog_features() with vis=False, feature_vec=True
+        if hog_channel == 'ALL':
+            hog_features = []
+            for channel in range(feature_image.shape[2]):
+                hog_features.append(
+                    self.__get_hog_features(feature_image[:, :, channel], orient, pix_per_cell, cell_per_block, vis=False,
+                                            feature_vec=True))
+            hog_features = np.ravel(hog_features)
+        else:
+            hog_features = self.__get_hog_features(feature_image[:, :, int(hog_channel)], orient, pix_per_cell, cell_per_block,
+                                                   vis=False, feature_vec=True)
+
+        if include_color_features:
+            # Apply bin_spatial() to get spatial color features
+            spatial_features = self.__get_bin_spatial(feature_image, size=self.__colorspace_spatial_size)
+
+            # Apply color_hist() also with a color space option now
+            hist_features = self.__get_color_hist(feature_image, nbins=self.__colorspace_hist_bins,
+                                                  bins_range=self.__colorspace_hist_range)
+
+            # Append the new feature vector to the features list
+            return np.concatenate((spatial_features, hist_features, hog_features))
+        else:
+            # Append the new feature vector to the features list
+            hog_features
