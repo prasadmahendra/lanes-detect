@@ -6,6 +6,7 @@ from detection_pipeline import Pipeline
 from calibrate import Calibrate
 from image_processing import ImageProcessing, ImageThresholding, ImageCannyEdgeDetection
 from vehicle_detection import VehicleDetection
+from vehicle_search import VehicleSearch
 from perspective import PerspectiveTransform
 from video import VideoRender
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(description='Road Lanes detection')
 
 parser.add_argument('-video', default='data/test_videos/project_video.mp4', help='video file to process')
-parser.add_argument('-cmd', default='vehicle-detect-predict', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect', 'vehicle-detect-train', 'vehicle-detect-predict'])
+parser.add_argument('-cmd', default='vehicle-detect-train', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect', 'vehicle-detect-train', 'vehicle-detect-predict'])
 parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
 parser.add_argument('-imagefile', default='data/test_images/image0010.png', help='image file (path) to process')
 
@@ -31,10 +32,10 @@ def run():
     config.read("settings.ini")
     logger.info("Running cmd: %s" % (args.cmd))
 
-    #args.cmd = 'vehicle-detect-train'
-    #vdetect = VehicleDetection(config)
-    #vdetect.selfdiag()
-    #return
+    args.cmd = 'vehicle-detect-train'
+    vdetect = VehicleSearch(config)
+    vdetect.selfdiag()
+    return
 
     if args.cmd == "selfdiag":
         cam_calib = Calibrate(config)
