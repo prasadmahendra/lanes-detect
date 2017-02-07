@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 from scipy.ndimage.measurements import label
 from vehicle_detection import VehicleDetection
 
@@ -7,10 +8,10 @@ class VehicleSearch(VehicleDetection):
     def __init__(self, config):
         super(VehicleSearch, self).__init__(config)
 
-        self.__y_start_pos_perc = config.getfloat('vehicle_search', 'y_start_pos_perc')
-        self.__y_stop_pos_perc = config.getfloat('vehicle_search', 'y_stop_pos_perc')
-        self.__x_start_pos_perc = config.getfloat('vehicle_search', 'x_start_pos_perc')
-        self.__x_stop_pos_perc = config.getfloat('vehicle_search', 'x_stop_pos_perc')
+        self.__y_start_pos_pix = config.getint('vehicle_search', 'y_start_pos_pix')
+        self.__y_stop_pos_pix = config.getint('vehicle_search', 'y_stop_pos_pix')
+        self.__x_start_pos_pix = config.getint('vehicle_search', 'x_start_pos_pix')
+        self.__x_stop_pos_pix = config.getint('vehicle_search', 'x_stop_pos_pix')
         self.__classifier, self.__scaler = self.load_classifier()
 
     def selfdiag(self):
@@ -57,14 +58,12 @@ class VehicleSearch(VehicleDetection):
 
 
     def __selfdiag1(self):
-        test_image = 'data/test_images/test1.jpg'
-        #est_image = 'data/test_videos/thumbs/projectvid_29.jpg'
+        #test_image = 'data/test_images/test1.jpg'
+        test_image = 'data/test_videos/thumbs/projectvid_29.jpg'
         image = self.load_image(test_image)
         image_shape = image.shape
-        image_height = image_shape[0]
-        image_width = image_shape[1]
 
-        image_roi = self.__draw_boxes(image, [[(0,int(image_height * self.__y_stop_pos_perc)), (image_width, int(image_height * self.__y_start_pos_perc))]])
+        image_roi = self.__draw_boxes(image, [[(self.__x_start_pos_pix,self.__y_stop_pos_pix), (self.__x_stop_pos_pix, self.__y_start_pos_pix)]])
 
         #for bbox_u in self.__search_bbox_sizes():
         #    image_roi = self.__draw_boxes(image_roi, [[(0, 0), bbox_u]])
@@ -131,7 +130,7 @@ class VehicleSearch(VehicleDetection):
         return [
             #(320, 320),
             #(288, 288),
-            (256, 256),
+            #(256, 256),
             #(224, 224),
             (192, 192),
             #(160, 160),
@@ -142,30 +141,27 @@ class VehicleSearch(VehicleDetection):
         ]
 
     def __slide_all_windows(self, image):
-        image_height = image.shape[0]
-        image_width = image.shape[1]
-
-        y_start = int(image_height * self.__y_start_pos_perc)
-        y_stop = image_height - self.engine_compart_pixes()
-        x_start = int(image_width * self.__x_start_pos_perc)
-        x_stop = int(image_width * self.__x_stop_pos_perc)
+        y_start = self.__y_start_pos_pix
+        y_stop = self.__y_stop_pos_pix - self.engine_compart_pixes()
+        x_start = self.__x_start_pos_pix
+        x_stop = self.__x_stop_pos_pix
 
         slide = 0
-        overlap = 0.65
+        overlap = 0.90
         window_list = []
 
         for bbox_size in self.__search_bbox_sizes():
             windows = self.__slide_window(image, x_start_stop=[x_start, x_stop], y_start_stop=[y_start, y_stop], xy_window=bbox_size, xy_overlap=(overlap, overlap))
 
-            #if self.save_output_images():
-            #    image_sliding = self.__draw_boxes(image, windows, thick=2)
-            #    self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-{}.png".format(slide), [image, image_sliding], ['image', 'image_sliding'], cmap='gray')
+            if self.save_output_images():
+                image_sliding = self.__draw_boxes(image, windows, thick=2)
+                self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-{}.png".format(slide), [image, image_sliding], ['image', 'image_sliding'], cmap='gray')
 
             x_start += 25       # todo: hardcoded values. determine these based on source image height/width
             x_stop -= 25
-            y_stop -= 10
-            overlap += 0.05
-            overlap = min(overlap, 0.95)
+            y_stop -= 25
+            #overlap += 0.05
+            #overlap = min(overlap, 0.95)
             slide += 1
 
             window_list += windows
@@ -175,6 +171,7 @@ class VehicleSearch(VehicleDetection):
     def __slide_window(self, img, x_start_stop=[None, None], y_start_stop=[None, None], xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
         image_height = img.shape[0]
         image_width = img.shape[1]
+        image_midpoint = image_width / 2
 
         # If x and/or y start/stop positions not defined, set to image size
         if x_start_stop[0] == None:
@@ -201,19 +198,36 @@ class VehicleSearch(VehicleDetection):
         # Note: you could vectorize this step, but in practice
         # you'll be considering windows one by one with your
         # classifier, so looping makes sense
+        counter = 0
+
         for ys in range(ny_windows):
             for xs in range(nx_windows):
                 # Calculate window position
                 startx = xs * nx_pix_per_step + x_start_stop[0]
                 endx = startx + xy_window[0]
+
+                bbox_midpoint = startx + ((endx - startx) / 2)
+                deviation = abs((bbox_midpoint - image_midpoint) / image_midpoint)
+                window_width_adj = int(deviation * 10)
+                endx = endx + window_width_adj
+
                 starty = ys * ny_pix_per_step + y_start_stop[0]
                 endy = starty + xy_window[1]
 
-                if starty + xy_window[1] > y_start_stop[1]:
+                if endy > y_start_stop[1]:
+                    continue  # bbox overflow
+                if endx > x_start_stop[1]:
                     continue  # bbox overflow
 
+                bbox = ((startx, starty), (endx, endy))
+                #if self.save_output_images():
+                #    image_sliding = self.__draw_boxes(np.copy(img), [bbox], thick=2)
+                #    self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-single-win-x{}-{}.png".format(xy_window[0], counter),
+                #                            [img, image_sliding], ['image', 'image_sliding'], cmap='gray')
+
                 # Append window position to list
-                window_list.append(((startx, starty), (endx, endy)))
+                window_list.append(bbox)
+                counter += 1
 
 
         # Return the list of windows
