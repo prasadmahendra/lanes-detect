@@ -5,6 +5,7 @@ import configparser
 from detection_pipeline import Pipeline
 from calibrate import Calibrate
 from image_processing import ImageProcessing, ImageThresholding, ImageCannyEdgeDetection
+from vehicle import VehiclesCollection
 from vehicle_detection import VehicleDetection
 from vehicle_search import VehicleSearch
 from perspective import PerspectiveTransform
@@ -32,10 +33,13 @@ def run():
     config.read("settings.ini")
     logger.info("Running cmd: %s" % (args.cmd))
 
-    args.cmd = 'vehicle-detect-train'
-    vdetect = VehicleSearch(config)
-    vdetect.selfdiag()
-    return
+    args.cmd = "detect-vehicles"
+    #vdetect = VehicleSearch(config)
+    #vdetect.selfdiag()
+
+    #vcoll = VehiclesCollection(config, 30)
+    #vcoll.selfdiag()
+    #return
 
     if args.cmd == "selfdiag":
         cam_calib = Calibrate(config)
@@ -62,7 +66,11 @@ def run():
 
     elif args.cmd == "detect":
         vid = VideoRender(config, args.video)
-        vid.play()
+        vid.play_lanes_detect()
+
+    elif args.cmd == "detect-vehicles":
+        vid = VideoRender(config, args.video)
+        vid.play_vehicle_search()
 
     elif args.cmd == 'undistort':
         cam_calib = Calibrate(config)

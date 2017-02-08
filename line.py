@@ -11,8 +11,8 @@ class LinesCollection(object):
     #__logger.setLevel(logging.DEBUG)
 
     def __init__(self, video_fps):
-        self.__left_lane_lines = deque([], maxlen=20)   # keep the last 20 lines
-        self.__right_lane_lines = deque([], maxlen=20)  # keep the last 20 lines
+        self.__left_lane_lines = deque([], maxlen=video_fps)   # keep the last video_fps lines
+        self.__right_lane_lines = deque([], maxlen=video_fps)  # keep the last video_fps lines
         self.__processed_frames_total = 0
         self.__detected_left_lanes_count = 0
         self.__detected_right_lanes_count = 0
@@ -20,7 +20,6 @@ class LinesCollection(object):
         self.__dropped_right_lanes_count = 0
         self.__curr_vehicle_position = 0
         self.__line_averages_over = video_fps
-        pass
 
     def set_line_averages_over(self, line_averages_over):
         self.__line_averages_over = line_averages_over

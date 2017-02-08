@@ -1,21 +1,29 @@
 import cv2
 import numpy as np
-import math
+import threading
+import multiprocessing
+import logging
+import concurrent.futures
 from scipy.ndimage.measurements import label
 from vehicle_detection import VehicleDetection
+from vehicle import VehiclesCollection, VehiclesOnScreen, VehicleBoundingBox
 
 class VehicleSearch(VehicleDetection):
-    def __init__(self, config):
+    __logger = logging.getLogger(__name__)
+
+    def __init__(self, config, video_fps=30):
         super(VehicleSearch, self).__init__(config)
 
+        self.__config = config
         self.__y_start_pos_pix = config.getint('vehicle_search', 'y_start_pos_pix')
         self.__y_stop_pos_pix = config.getint('vehicle_search', 'y_stop_pos_pix')
         self.__x_start_pos_pix = config.getint('vehicle_search', 'x_start_pos_pix')
         self.__x_stop_pos_pix = config.getint('vehicle_search', 'x_stop_pos_pix')
         self.__classifier, self.__scaler = self.load_classifier()
+        self.__vehicles_collection = VehiclesCollection(config, video_fps)
 
     def selfdiag(self):
-        self.__selfdiag1()
+        self.__selfdiag2()
 
     def __selfdiag2(self):
         image_files = [
@@ -54,29 +62,23 @@ class VehicleSearch(VehicleDetection):
             self.display_image_grid('vehicle-detection/pipeline', 'pipeline-{}.png'.format(counter), [image, image_final], ['image', 'image_final'], cmap='gray')
             counter += 1
 
-        pass
-
-
     def __selfdiag1(self):
         #test_image = 'data/test_images/test1.jpg'
         test_image = 'data/test_videos/thumbs/projectvid_29.jpg'
         image = self.load_image(test_image)
-        image_shape = image.shape
 
-        image_roi = self.__draw_boxes(image, [[(self.__x_start_pos_pix,self.__y_stop_pos_pix), (self.__x_stop_pos_pix, self.__y_start_pos_pix)]])
-
-        #for bbox_u in self.__search_bbox_sizes():
-        #    image_roi = self.__draw_boxes(image_roi, [[(0, 0), bbox_u]])
+        image_roi = self.__draw_boxes(np.copy(image), [[(self.__x_start_pos_pix,self.__y_stop_pos_pix), (self.__x_stop_pos_pix, self.__y_start_pos_pix)]])
 
         windows = self.__slide_all_windows(image)
         car_windows, heatmap = self.__detect_vehicle_windows(image, windows)
         heatmap_thresholded = self.__heatmap_threshold(np.copy(heatmap), threshold=2)
-        cars_bboxes_img = self.__draw_boxes(image, car_windows)
+        cars_bboxes_img = self.__draw_boxes(np.copy(image), car_windows)
 
         labels = label(heatmap_thresholded)
         print(labels[1], 'cars found')
-        label_image = labels[0]
-        cars_bboxes_img_final = self.__draw_labeled_bboxes(np.copy(image), labels)
+        #cars_bboxes_img_final = self.__draw_labeled_bboxes(np.copy(image), labels)
+        bboxes = self.__labels_to_bbox(labels)
+        cars_bboxes_img_final = self.__draw_boxes(np.copy(image), bboxes)
 
         self.display_image_grid('vehicle-detection/sliding-windows', 'sliding-windows-roi.png', [image, image_roi, cars_bboxes_img], ['image', 'search region', 'cars_bboxes_img'], cmap='gray')
         self.display_image_grid('vehicle-detection/sliding-windows', 'sliding-windows-roi-heatmaps.png', [image, heatmap, heatmap_thresholded, cars_bboxes_img_final], ['image', 'heatmap', 'heatmap_thresholded', 'labels'], cmap='gray')
@@ -85,10 +87,23 @@ class VehicleSearch(VehicleDetection):
         windows = self.__slide_all_windows(image)
         car_windows, heatmap = self.__detect_vehicle_windows(image, windows)
         heatmap_thresholded = self.__heatmap_threshold(np.copy(heatmap), threshold=2)
-        #cars_bboxes_img = self.__draw_boxes(image, car_windows)
 
         labels = label(heatmap_thresholded)
-        cars_bboxes_img_final = self.__draw_labeled_bboxes(image, labels)
+        bboxes = self.__labels_to_bbox(labels)
+        #cars_bboxes_img_final = self.__draw_labeled_bboxes(image, labels)
+        #cars_bboxes_img_final = self.__draw_boxes(np.copy(image), bboxes)
+
+        vos = VehiclesOnScreen(self.__config)
+        for bbox in bboxes:
+            vbbox = VehicleBoundingBox(self.__config, bbox)
+            vos.append(vbbox)
+
+        self.__vehicles_collection.append(vos)
+
+        cars_bboxes_img_final = image
+        for bbox in self.__vehicles_collection.get_all_drawables():
+            cars_bboxes_img_final = self.__draw_boxes(image, [bbox])
+            self.display_image_grid('vehicle-detection/pipeline', 'vcollection.png', [image, image], ['image', 'image_final'], cmap='gray')
 
         return cars_bboxes_img_final
 
@@ -99,32 +114,41 @@ class VehicleSearch(VehicleDetection):
         heatmap = np.zeros((image_height, image_width), dtype=np.uint8)
 
         # TODO: extract hog once vs. per each sliding window
-        # features = self.extract_hog_features(image)
-        #feature_array = self.extract_hog_features(image, feature_vec=False)
-        #print(feature_array.shape)
 
         # 1) Create an empty list to receive positive detection windows
         on_windows = []
+
         # 2) Iterate over all windows in the list
-        for window in windows:
-            # 3) Extract the test window from original image
-            test_img = self.resize_for_classification(image[window[0][1]:window[1][1], window[0][0]:window[1][0]])     #cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
-            # 4) Extract features for that window using single_img_features()
-            features = self.extract_hog_features(test_img)
-            # 5) Scale extracted features to be fed to classifier
-            test_features = self.__scaler.transform(np.array(features).reshape(1, -1))
-            # 6) Predict using your classifier
-            prediction = self.__classifier.predict(test_features)
-
-            # 7) If positive (prediction == 1) then save the window
-            if prediction[0] == 1:
-                print("Car!")
-                on_windows.append(window)
-                heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += 1
-
+        with concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+            all_futs = {executor.submit(self.__predict_on_window, window, image, on_windows, heatmap): window for window in windows}
+            for future in concurrent.futures.as_completed(all_futs):
+                window = all_futs[future]
+                try:
+                    (_, prediction) = future.result()
+                except Exception as exc:
+                    print('%r generated an exception: %s' % (window, exc))
+                else:
+                    if prediction[0] == 1:
+                        on_windows.append(window)
+                        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += 1
 
         # 8) Return windows for positive detections
         return on_windows, heatmap
+
+    def __predict_on_window(self, window, image, found_windows, heatmap):
+        # 3) Extract the test window from original image
+        test_img = self.resize_for_classification(image[window[0][1]:window[1][1], window[0][0]:window[1][0]])
+        # 4) Extract features for that window using single_img_features()
+        features = self.extract_hog_features(test_img)
+        # 5) Scale extracted features to be fed to classifier
+        test_features = self.__scaler.transform(np.array(features).reshape(1, -1))
+        # 6) Predict using your classifier
+        prediction = self.__classifier.predict(test_features)
+
+        if prediction[0] == 1:
+            self.__logger.info("car detected. thread: {}".format(threading.get_ident()))
+
+        return (window, prediction)
 
     def __search_bbox_sizes(self):
         return [
@@ -153,15 +177,13 @@ class VehicleSearch(VehicleDetection):
         for bbox_size in self.__search_bbox_sizes():
             windows = self.__slide_window(image, x_start_stop=[x_start, x_stop], y_start_stop=[y_start, y_stop], xy_window=bbox_size, xy_overlap=(overlap, overlap))
 
-            if self.save_output_images():
-                image_sliding = self.__draw_boxes(image, windows, thick=2)
-                self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-{}.png".format(slide), [image, image_sliding], ['image', 'image_sliding'], cmap='gray')
+            #if self.save_output_images():
+            #    image_sliding = self.__draw_boxes(np.copy(image), windows, thick=2)
+            #    self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-{}.png".format(slide), [image, image_sliding], ['image', 'image_sliding'], cmap='gray')
 
-            x_start += 25       # todo: hardcoded values. determine these based on source image height/width
+            x_start += 25
             x_stop -= 25
             y_stop -= 25
-            #overlap += 0.05
-            #overlap = min(overlap, 0.95)
             slide += 1
 
             window_list += windows
@@ -233,18 +255,33 @@ class VehicleSearch(VehicleDetection):
         # Return the list of windows
         return window_list
 
-    def __draw_boxes(self, img, bboxes, color=(0, 0, 255), thick=6):
-        imcopy = np.copy(img)
+    def __draw_boxes(self, img, bboxes, color=(0, 0, 255), thick=3):
         for bbox in bboxes:
-            cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+            cv2.rectangle(img, bbox[0], bbox[1], color, thick)
 
-        return imcopy
+        return img
 
     def __heatmap_threshold(self, heatmap, threshold=3):
         # Zero out pixels below the threshold
         heatmap[heatmap < threshold] = 0
         # Return thresholded map
         return heatmap
+
+    def __labels_to_bbox(self, labels):
+        bboxes = []
+        # Iterate through all detected cars
+        for car_number in range(1, labels[1]+1):
+            # Find pixels with each car_number label value
+            nonzero = (labels[0] == car_number).nonzero()
+            # Identify x and y values of those pixels
+            nonzeroy = np.array(nonzero[0])
+            nonzerox = np.array(nonzero[1])
+            # Define a bounding box based on min/max x and y
+            bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+            bboxes.append(bbox)
+
+        # Return the image
+        return bboxes
 
     def __draw_labeled_bboxes(self, img, labels):
         # Iterate through all detected cars
