@@ -10,7 +10,7 @@ from tqdm import tqdm
 import numpy as np
 from sklearn.svm import LinearSVC, SVC
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.preprocessing import StandardScaler
 from skimage.feature import hog
 from image_processing import ImageProcessing
@@ -129,6 +129,8 @@ class VehicleDetection(ImageProcessing):
         features = self.extract_hog_features(image)
 
         prediction = self.__classifier_obj.predict([features])
+        predict_proba = self.__classifier_obj.predict_proba([features])
+        self.__logger.info("predict_proba: {}".format(predict_proba))
         return prediction[0]
 
     def resize_for_classification(self, image):
@@ -227,10 +229,13 @@ class VehicleDetection(ImageProcessing):
     def __load_hog_params(self):
         self.__logger.info("Loading hog params: {}".format(self.__saved_hog_params))
         [self.__hog_colorspace, self.__hog_orient, self.__hog_cell_per_block, self.__hog_pix_per_cell, self.__hog_channel] = pickle.load(open(self.__saved_hog_params, "rb"))
+        self.__logger.info("Loaded hog colorspace: {} orient: {} pix per cell: {} cell per block: {} channel: {}".format(self.__hog_colorspace, self.__hog_orient, self.__hog_pix_per_cell, self.__hog_cell_per_block, self.__hog_channel))
 
     def __load_color_params(self):
         self.__logger.info("Loading color params: {}".format(self.__saved_color_params))
         [self.__colorspace_spatial_size, self.__colorspace_hist_bins, self.__colorspace_hist_range] = pickle.load(open(self.__saved_color_params, "rb"))
+
+        self.__logger.info("Loaded color params. spat size: {} hist bins: {} hist range: {}".format(self.__colorspace_spatial_size, self.__colorspace_hist_bins, self.__colorspace_hist_range))
 
     def __get_classifier(self):
         clf = None
@@ -240,10 +245,13 @@ class VehicleDetection(ImageProcessing):
             clf = LinearSVC()
         elif self.__classifier == 'SVC':
             self.__logger.info('Using SVC classifier')
-            clf = SVC(kernel='rbf', gamma='auto', C=1.0)
+            clf = SVC(kernel='linear', gamma='auto', C=1.0)
         elif self.__classifier == 'DecisionTreeClassifier':
             self.__logger.info('Using DecisionTreeClassifier classifier')
             clf = DecisionTreeClassifier(min_samples_split=50, criterion='entropy')
+        elif self.__classifier == 'GradientBoostingClassifier':
+            self.__logger.info('Using GradientBoostingClassifier classifier')
+            clf = GradientBoostingClassifier()
         else:
             raise Exception("Unsupported classifier {}".format(self.__classifier))
 

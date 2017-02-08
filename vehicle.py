@@ -15,7 +15,7 @@ class VehiclesCollection(ImageProcessing):
     def __init__(self, config, video_fps):
         super(VehiclesCollection, self).__init__(config)
         self.__config = config
-        self.__vehicles_on_screen = deque([], maxlen=int(10))
+        self.__vehicles_on_screen = deque([], maxlen=int(video_fps))
         self.__averages_over = int(video_fps)
         self.__processed_frames_total = 0
 

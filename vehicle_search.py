@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import threading
 import multiprocessing
 import logging
 import concurrent.futures
@@ -19,6 +18,7 @@ class VehicleSearch(VehicleDetection):
         self.__y_stop_pos_pix = config.getint('vehicle_search', 'y_stop_pos_pix')
         self.__x_start_pos_pix = config.getint('vehicle_search', 'x_start_pos_pix')
         self.__x_stop_pos_pix = config.getint('vehicle_search', 'x_stop_pos_pix')
+        self.__heatmap_threshold_value = config.getint('vehicle_search', 'heatmap_threshold')
         self.__classifier, self.__scaler = self.load_classifier()
         self.__vehicles_collection = VehiclesCollection(config, video_fps)
 
@@ -55,43 +55,41 @@ class VehicleSearch(VehicleDetection):
             'projectvid_53.jpg'
         ]
 
-        counter = 0
-        for image_file in image_files:
-            image = self.load_image("data/test_videos/thumbs/{}".format(image_file))
+        for counter in range(50):
+            image = self.load_image("data/test_videos/thumbs/projectvid_{}.jpg".format(counter + 1))
             image_final = self.process(image)
             self.display_image_grid('vehicle-detection/pipeline', 'pipeline-{}.png'.format(counter), [image, image_final], ['image', 'image_final'], cmap='gray')
-            counter += 1
 
     def __selfdiag1(self):
-        #test_image = 'data/test_images/test1.jpg'
-        test_image = 'data/test_videos/thumbs/projectvid_29.jpg'
-        image = self.load_image(test_image)
+        for counter in range(50):
+            test_image = 'data/test_images/test1.jpg'
+            #test_image = "data/test_videos/thumbs/projectvid_{}.jpg".format(counter + 1)
+            image = self.load_image(test_image)
 
-        image_roi = self.__draw_boxes(np.copy(image), [[(self.__x_start_pos_pix,self.__y_stop_pos_pix), (self.__x_stop_pos_pix, self.__y_start_pos_pix)]])
+            image_roi = self.__draw_boxes(np.copy(image), [[(self.__x_start_pos_pix,self.__y_stop_pos_pix), (self.__x_stop_pos_pix, self.__y_start_pos_pix)]])
 
-        windows = self.__slide_all_windows(image)
-        car_windows, heatmap = self.__detect_vehicle_windows(image, windows)
-        heatmap_thresholded = self.__heatmap_threshold(np.copy(heatmap), threshold=2)
-        cars_bboxes_img = self.__draw_boxes(np.copy(image), car_windows)
+            windows = self.__slide_all_windows(image)
+            car_windows, heatmap = self.__detect_vehicle_windows(image, windows)
+            heatmap_thresholded = self.__heatmap_threshold(np.copy(heatmap), threshold=self.__heatmap_threshold_value)
+            cars_bboxes_img = self.__draw_boxes(np.copy(image), car_windows)
 
-        labels = label(heatmap_thresholded)
-        print(labels[1], 'cars found')
-        #cars_bboxes_img_final = self.__draw_labeled_bboxes(np.copy(image), labels)
-        bboxes = self.__labels_to_bbox(labels)
-        cars_bboxes_img_final = self.__draw_boxes(np.copy(image), bboxes)
+            labels = label(heatmap_thresholded)
+            self.__logger.info('{} cars found'.format(labels[1]))
+            image_labelled = self.__draw_labeled_bboxes(np.copy(image), labels)
+            bboxes = self.__labels_to_bbox(labels)
+            cars_bboxes_img_final = self.__draw_boxes(np.copy(image), bboxes)
 
-        self.display_image_grid('vehicle-detection/sliding-windows', 'sliding-windows-roi.png', [image, image_roi, cars_bboxes_img], ['image', 'search region', 'cars_bboxes_img'], cmap='gray')
-        self.display_image_grid('vehicle-detection/sliding-windows', 'sliding-windows-roi-heatmaps.png', [image, heatmap, heatmap_thresholded, cars_bboxes_img_final], ['image', 'heatmap', 'heatmap_thresholded', 'labels'], cmap='gray')
+            self.display_image_grid('vehicle-detection/sliding-windows', 'sliding-windows-roi-{}.png'.format(counter), [image, image_roi, cars_bboxes_img], ['image', 'search region', 'cars_bboxes_img'], cmap='gray')
+            self.display_image_grid('vehicle-detection/sliding-windows', 'sliding-windows-roi-heatmaps-{}.png'.format(counter), [image, heatmap, heatmap_thresholded, image_labelled, cars_bboxes_img_final], ['image', 'heatmap', 'heatmap_thresholded', 'image_labelled', 'final'], cmap='gray')
+            break
 
     def process(self, image):
         windows = self.__slide_all_windows(image)
         car_windows, heatmap = self.__detect_vehicle_windows(image, windows)
-        heatmap_thresholded = self.__heatmap_threshold(np.copy(heatmap), threshold=2)
+        heatmap_thresholded = self.__heatmap_threshold(np.copy(heatmap), threshold=self.__heatmap_threshold_value)
 
         labels = label(heatmap_thresholded)
         bboxes = self.__labels_to_bbox(labels)
-        #cars_bboxes_img_final = self.__draw_labeled_bboxes(image, labels)
-        #cars_bboxes_img_final = self.__draw_boxes(np.copy(image), bboxes)
 
         vos = VehiclesOnScreen(self.__config)
         for bbox in bboxes:
@@ -145,10 +143,16 @@ class VehicleSearch(VehicleDetection):
         # 6) Predict using your classifier
         prediction = self.__classifier.predict(test_features)
 
-        if prediction[0] == 1:
-            self.__logger.info("car detected. thread: {}".format(threading.get_ident()))
+        #predict_proba = self.__classifier.predict_proba([features])[0]
+        #self.__logger.info("predict_proba: {}".format(predict_proba))
+        #if prediction[0] == 1:
+        #    self.__logger.info("--> {}: {}".format(prediction, predict_proba))
 
-        return (window, prediction)
+        if prediction[0] == 1:
+            self.__logger.info("car detected. prediction: {}".format(prediction))
+            return (window, prediction)
+        else:
+            return (window, prediction)
 
     def __search_bbox_sizes(self):
         return [
@@ -177,12 +181,8 @@ class VehicleSearch(VehicleDetection):
         for bbox_size in self.__search_bbox_sizes():
             windows = self.__slide_window(image, x_start_stop=[x_start, x_stop], y_start_stop=[y_start, y_stop], xy_window=bbox_size, xy_overlap=(overlap, overlap))
 
-            #if self.save_output_images():
-            #    image_sliding = self.__draw_boxes(np.copy(image), windows, thick=2)
-            #    self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-{}.png".format(slide), [image, image_sliding], ['image', 'image_sliding'], cmap='gray')
-
-            x_start += 25
-            x_stop -= 25
+            x_start += 35
+            x_stop -= 35
             y_stop -= 25
             slide += 1
 
@@ -191,7 +191,6 @@ class VehicleSearch(VehicleDetection):
         return window_list
 
     def __slide_window(self, img, x_start_stop=[None, None], y_start_stop=[None, None], xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
-        image_height = img.shape[0]
         image_width = img.shape[1]
         image_midpoint = image_width / 2
 
@@ -242,10 +241,6 @@ class VehicleSearch(VehicleDetection):
                     continue  # bbox overflow
 
                 bbox = ((startx, starty), (endx, endy))
-                #if self.save_output_images():
-                #    image_sliding = self.__draw_boxes(np.copy(img), [bbox], thick=2)
-                #    self.display_image_grid('vehicle-detection/sliding-windows', "sliding-windows-single-win-x{}-{}.png".format(xy_window[0], counter),
-                #                            [img, image_sliding], ['image', 'image_sliding'], cmap='gray')
 
                 # Append window position to list
                 window_list.append(bbox)
@@ -261,7 +256,7 @@ class VehicleSearch(VehicleDetection):
 
         return img
 
-    def __heatmap_threshold(self, heatmap, threshold=3):
+    def __heatmap_threshold(self, heatmap, threshold):
         # Zero out pixels below the threshold
         heatmap[heatmap < threshold] = 0
         # Return thresholded map
