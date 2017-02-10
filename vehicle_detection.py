@@ -242,7 +242,7 @@ class VehicleDetection(ImageProcessing):
 
         if self.__classifier == 'LinearSVC':
             self.__logger.info('Using LinearSVC classifier')
-            clf = LinearSVC()
+            clf = LinearSVC(C=0.75)
         elif self.__classifier == 'SVC':
             self.__logger.info('Using SVC classifier')
             clf = SVC(kernel='linear', gamma='auto', C=1.0)

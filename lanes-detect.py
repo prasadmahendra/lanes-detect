@@ -5,19 +5,17 @@ import configparser
 from detection_pipeline import Pipeline
 from calibrate import Calibrate
 from image_processing import ImageProcessing, ImageThresholding, ImageCannyEdgeDetection
-from vehicle import VehiclesCollection
 from vehicle_detection import VehicleDetection
-from vehicle_search import VehicleSearch
 from perspective import PerspectiveTransform
 from video import VideoRender
 
 logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-parser = argparse.ArgumentParser(description='Road Lanes detection')
+parser = argparse.ArgumentParser(description='Road Lane lines & vehicles detection')
 
 parser.add_argument('-video', default='data/test_videos/project_video.mp4', help='video file to process')
-parser.add_argument('-cmd', default='selfdiag', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect', 'vehicle-detect-train', 'vehicle-detect-predict', 'detect-vehicles'])
+parser.add_argument('-cmd', default='detect-vehicles', help='Commands (default: selfdiag)', choices=['selfdiag', 'calib', 'detect', 'vehicle-detect-train', 'vehicle-detect-predict', 'detect-vehicles'])
 parser.add_argument("-v", "--verbose", help="Verbose output", action="store_true")
 parser.add_argument('-imagefile', default='data/test_images/image0010.png', help='image file (path) to process')
 

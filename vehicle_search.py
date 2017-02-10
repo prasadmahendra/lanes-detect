@@ -175,7 +175,7 @@ class VehicleSearch(VehicleDetection):
         x_stop = self.__x_stop_pos_pix
 
         slide = 0
-        overlap = 0.90
+        overlap = 0.80
         window_list = []
 
         for bbox_size in self.__search_bbox_sizes():

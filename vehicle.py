@@ -2,20 +2,19 @@ import logging
 import copy
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 import uuid
 from collections import deque
 from image_processing import ImageProcessing
 
 class VehiclesCollection(ImageProcessing):
     __logger = logging.getLogger(__name__)
-    MIN_CENTROID_DISTANCE = 50
-    MIN_CENTROIDS_THRESHOLD = 5
+    MIN_CENTROID_DISTANCE = 32
+    MIN_CENTROIDS_THRESHOLD = 10
 
     def __init__(self, config, video_fps):
         super(VehiclesCollection, self).__init__(config)
         self.__config = config
-        self.__vehicles_on_screen = deque([], maxlen=int(video_fps))
+        self.__vehicles_on_screen = deque([], maxlen=int(video_fps * 2))
         self.__averages_over = int(video_fps)
         self.__processed_frames_total = 0
 
@@ -74,22 +73,18 @@ class VehiclesCollection(ImageProcessing):
                     for vbbox_new in v_on_s_new.vbboxes():
                         dist = vbbox_prev.vec_distance(vbbox_new)
                         if dist <= self.MIN_CENTROID_DISTANCE:
+                            #if vbbox_new.width() > self.MIN_CENTROID_DISTANCE:
                             self.__logger.info("bbox good: {} dist: {} bbox id: {}".format(vbbox_new.get_bbox(), dist, vbbox_new.get_id()))
                             vbbox_new.set_id(vbbox_prev.get_id())
                             vbbox_new.set_can_display(True)
+                            #else:
+                            #    self.__logger.info("bbox too small: {} dist: {} bbox id: {}".format(vbbox_new.get_bbox(), dist, vbbox_new.get_id()))
                         else:
                             self.__logger.info("bbox too far: {} dist: {} id: {}".format(vbbox_new.get_bbox(), dist, vbbox_new.get_id()))
 
 
                 frame_counter += 1
             self.__vehicles_on_screen.append(v_on_s_new)
-
-    def current(self):
-        if len(self.__vehicles) > 0:
-            # peek at leftmost item
-            return self.__vehicles[0]
-        else:
-            return None
 
     def get_all_drawables(self, min_centroids_thresh=MIN_CENTROIDS_THRESHOLD):
         centroids = {}
@@ -116,7 +111,6 @@ class VehiclesCollection(ImageProcessing):
                     self.__logger.info("\t p1: {} p2: {}".format(p1, p2))
                     p1_sum += weight * np.array(p1)
                     p2_sum += weight * np.array(p2)
-                    #weight = weight - 0.1
 
                 p1_sum = p1_sum / centroids[id][0]
                 p2_sum = p2_sum / centroids[id][0]
@@ -186,6 +180,14 @@ class VehicleBoundingBox(ImageProcessing):
 
     def set_can_display(self, v):
         self.__display = v
+
+    def width(self):
+        p1, p2 = self.__bbox
+        return abs(p1[0] - p2[0])
+
+    def height(self):
+        p1, p2 = self.__bbox
+        return abs(p1[1] - p2[1])
 
     def vec_distance(self, v_bbox):
         x1, y1 = self.__bbox_center
