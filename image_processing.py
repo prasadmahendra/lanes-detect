@@ -1,5 +1,7 @@
 import logging
+import os
 import cv2
+import zipfile
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -96,7 +98,7 @@ class ImageProcessing(object):
         plt.subplots_adjust(left=0., right=1, top=0.9, bottom=0.)
         plt.suptitle(filename)
 
-        if save == True:
+        if save == True or self.save_output_images() == True:
             self.__logger.info("saving {0}/{1}/{2}".format(self.__output_images_dir, subfolder, filename))
             fig.savefig("{0}/{1}/{2}".format(self.__output_images_dir, subfolder, filename))
         else:
@@ -159,13 +161,14 @@ class ImageProcessing(object):
         assert(img is not None)
         return img
 
-    def to_grayscale(self, image, to_binary=False, chan='R', threshold=(0, 255)):
+    def to_grayscale(self, image, to_binary=False, chan='ALL', threshold=(0, 255)):
         """If you are reading in an image using mpimg.imread() this will read in an RGB image and you should convert to grayscale
            using cv2.COLOR_RGB2GRAY, but if you are using cv2.imread() or the glob API, as happens in this video example,
            this will read in a BGR image and you should convert to grayscale using cv2.COLOR_BGR2GRAY"""
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        if to_binary == True:
+        chan = chan.upper()
+        if chan != 'ALL':
             if chan == 'R':
                 R = gray[:, :, 0]
                 chan_selected = R
@@ -177,15 +180,19 @@ class ImageProcessing(object):
                 chan_selected = B
             else:
                 chan_selected = gray
-
-            return self.__thresholded_binary_image(chan_selected, threshold)
         else:
-            return gray
-
-    def to_hsv(self, image, to_binary=False, chan='S', threshold=(0, 255)):
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+            chan_selected = gray
 
         if to_binary == True:
+            return self.__thresholded_binary_image(chan_selected, threshold)
+        else:
+            return chan_selected
+
+    def to_hsv(self, image, to_binary=False, chan='ALL', threshold=(0, 255)):
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        chan = chan.upper()
+        if chan != 'ALL':
             H = hsv[:, :, 0]
             S = hsv[:, :, 1]
             V = hsv[:, :, 2]
@@ -197,15 +204,91 @@ class ImageProcessing(object):
                 chan_selected = S
             elif chan == 'V':
                 chan_selected = V
-
-            return self.__thresholded_binary_image(chan_selected, threshold)
         else:
-            return hsv
-
-    def to_hls(self, image, to_binary=False, chan='S', threshold=(0, 255)):
-        hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+            chan_selected = hsv
 
         if to_binary == True:
+            return self.__thresholded_binary_image(chan_selected, threshold)
+        else:
+            return chan_selected
+
+    def to_luv(self, image, to_binary=False, chan='ALL', threshold=(0, 255)):
+        luv = cv2.cvtColor(image, cv2.COLOR_BGR2LUV)
+
+        chan = chan.upper()
+        if chan != 'ALL':
+            L = luv[:, :, 0]
+            U = luv[:, :, 1]
+            V = luv[:, :, 2]
+
+            chan_selected = L
+            if chan == 'L':
+                chan_selected = L
+            elif chan == 'U':
+                chan_selected = U
+            elif chan == 'V':
+                chan_selected = V
+        else:
+            chan_selected = luv
+
+        if to_binary == True:
+            return self.__thresholded_binary_image(chan_selected, threshold)
+        else:
+            return chan_selected
+
+    def to_yuv(self, image, to_binary=False, chan='ALL', threshold=(0, 255)):
+        yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
+
+        chan = chan.upper()
+        if chan != 'ALL':
+            Y = yuv[:, :, 0]
+            U = yuv[:, :, 1]
+            V = yuv[:, :, 2]
+
+            chan_selected = Y
+            if chan == 'Y':
+                chan_selected = Y
+            elif chan == 'U':
+                chan_selected = U
+            elif chan == 'V':
+                chan_selected = V
+        else:
+            chan_selected = yuv
+
+        if to_binary == True:
+            return self.__thresholded_binary_image(chan_selected, threshold)
+        else:
+            return chan_selected
+
+    def to_ycrcb(self, image, to_binary=False, chan='ALL', threshold=(0, 255)):
+        YCrCb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
+
+        chan = chan.upper()
+        if chan != 'ALL':
+            Y = YCrCb[:, :, 0]
+            Cr = YCrCb[:, :, 1]
+            Cb = YCrCb[:, :, 2]
+
+            chan_selected = Y
+            if chan == 'Y':
+                chan_selected = Y
+            elif chan == 'CR':
+                chan_selected = Cr
+            elif chan == 'CB':
+                chan_selected = Cb
+        else:
+            chan_selected = YCrCb
+
+        if to_binary == True:
+            return self.__thresholded_binary_image(chan_selected, threshold)
+        else:
+            return chan_selected
+
+    def to_hls(self, image, to_binary=False, chan='ALL', threshold=(0, 255)):
+        hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
+
+        chan = chan.upper()
+        if chan != 'ALL':
             H = hls[:, :, 0]
             L = hls[:, :, 1]
             S = hls[:, :, 2]
@@ -217,10 +300,13 @@ class ImageProcessing(object):
                 chan_selected = L
             elif chan == 'S':
                 chan_selected = S
+        else:
+            chan_selected = hls
 
+        if to_binary == True:
             return self.__thresholded_binary_image(chan_selected, threshold)
         else:
-            return hls
+            return chan_selected
 
     def gaussian_blur(self, image, kernel_size):
         """Applies a Gaussian Noise kernel"""
@@ -252,6 +338,13 @@ class ImageProcessing(object):
         binary = np.zeros_like(image)
         binary[(image > threshold[0]) & (image <= threshold[1])] = 1
         return binary
+
+    def unzip(self, zippedfile, outfolder):
+        with zipfile.ZipFile(zippedfile) as zf:
+            for member in zf.infolist():
+                if not member.filename.startswith("__MACOSX"):
+                    self.__logger.info("Extracting {0}/{1}".format(outfolder, member.filename))
+                    zf.extract(member, outfolder)
 
 class ImageCannyEdgeDetection(ImageProcessing):
     def __init__(self, config):
