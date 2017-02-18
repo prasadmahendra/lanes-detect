@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 import multiprocessing
 import logging
 import concurrent.futures
@@ -18,12 +19,15 @@ class VehicleSearch(VehicleDetection):
         self.__y_stop_pos_pix = config.getint('vehicle_search', 'y_stop_pos_pix')
         self.__x_start_pos_pix = config.getint('vehicle_search', 'x_start_pos_pix')
         self.__x_stop_pos_pix = config.getint('vehicle_search', 'x_stop_pos_pix')
+        self.__enable_x_axis_search_sweep = config.getboolean('vehicle_search', 'enable_x_axis_sweep')
+        self.__x_axis_search_sweep = 0
+        self.__x_axis_search_sweep_max = 4
         self.__heatmap_threshold_value = config.getint('vehicle_search', 'heatmap_threshold')
         self.__classifier, self.__scaler = self.load_classifier()
         self.__vehicles_collection = VehiclesCollection(config, video_fps)
 
     def selfdiag(self):
-        self.__selfdiag2()
+        self.__selfdiag1()
 
     def __selfdiag2(self):
         image_files = [
@@ -174,21 +178,45 @@ class VehicleSearch(VehicleDetection):
         x_start = self.__x_start_pos_pix
         x_stop = self.__x_stop_pos_pix
 
+        self.__x_axis_search_sweep = self.__x_axis_search_sweep + 1
+        if self.__x_axis_search_sweep > self.__x_axis_search_sweep_max:
+            self.__x_axis_search_sweep = 1
+
         slide = 0
-        overlap = 0.80
+        overlap_x = 0.60
+        overlap_y = 0.50
         window_list = []
 
         for bbox_size in self.__search_bbox_sizes():
-            windows = self.__slide_window(image, x_start_stop=[x_start, x_stop], y_start_stop=[y_start, y_stop], xy_window=bbox_size, xy_overlap=(overlap, overlap))
+            x_start_sweeping, x_stop_sweeping = int(x_start), int(x_stop)
+            if self.__enable_x_axis_search_sweep:
+                x_start_sweeping, x_stop_sweeping = self.__x_axis_search_sweep_adj(x_start, x_stop)
 
-            x_start += 35
-            x_stop -= 35
+            windows = self.__slide_window(image, x_start_stop=[x_start_sweeping, x_stop_sweeping], y_start_stop=[y_start, y_stop], xy_window=bbox_size, xy_overlap=(overlap_x, overlap_y))
+
+            x_start += 15
+            x_stop -= 15
+
             y_stop -= 25
             slide += 1
 
             window_list += windows
 
         return window_list
+
+    def __x_axis_search_sweep_adj(self, x_start, x_stop):
+        x_width = x_stop - x_start
+
+        if x_width > 0:
+            x_delta = int(math.ceil(x_width / self.__x_axis_search_sweep_max))
+            x_start_new = x_start + (x_delta * (self.__x_axis_search_sweep - 1))
+            x_stop_new = x_start_new + x_delta
+            self.__logger.info("{}, {} -> {}, {} sweep: {}".format(x_start, x_stop, x_start_new, x_stop_new, self.__x_axis_search_sweep ))
+            return x_start_new, x_stop_new
+        else:
+            self.__x_axis_search_sweep = 0
+
+        return int(x_start), int(x_stop)
 
     def __slide_window(self, img, x_start_stop=[None, None], y_start_stop=[None, None], xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
         image_width = img.shape[1]
