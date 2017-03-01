@@ -9,7 +9,7 @@ from image_processing import ImageProcessing
 class VehiclesCollection(ImageProcessing):
     __logger = logging.getLogger(__name__)
     MIN_CENTROID_DISTANCE = 32
-    MIN_CENTROIDS_THRESHOLD = 10
+    MIN_CENTROIDS_THRESHOLD = 2
 
     def __init__(self, config, video_fps):
         super(VehiclesCollection, self).__init__(config)

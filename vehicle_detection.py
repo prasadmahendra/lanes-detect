@@ -129,7 +129,7 @@ class VehicleDetection(ImageProcessing):
         features = self.extract_hog_features(image)
 
         prediction = self.__classifier_obj.predict([features])
-        predict_proba = self.__classifier_obj.predict_proba([features])
+        predict_proba = self.__classifier_obj.decision_function([features])
         self.__logger.info("predict_proba: {}".format(predict_proba))
         return prediction[0]
 
